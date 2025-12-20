@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Food</title>
+</head>
+<body>
+<div class="navbar">
+    <a href="/">Dashboard</a>
+    <a href="/food">Food</a>
+    <a href="/report">Report</a>
+</div>
+
+<h2>Edit Food Entry</h2>
+
+<form method="POST">
+    <label>Quantity</label><br>
+    <input type="number" step="0.1" name="qty" value="{{ item.qty }}"><br><br>
+
+    <label>Calories</label><br>
+    <input type="number" step="0.1" name="calories" value="{{ item.calories }}"><br><br>
+
+    <label>Protein</label><br>
+    <input type="number" step="0.1" name="protein" value="{{ item.protein }}"><br><br>
+
+    <label>Fat</label><br>
+    <input type="number" step="0.1" name="fat" value="{{ item.fat }}"><br><br>
+
+    <label>Sugar</label><br>
+    <input type="number" step="0.1" name="sugar" value="{{ item.sugar }}"><br><br>
+
+    <button type="submit">Save Changes</button>
+</form>
+
+<hr>
+<a href="/food">⬅ Back</a>
+
+</body>
+</html>

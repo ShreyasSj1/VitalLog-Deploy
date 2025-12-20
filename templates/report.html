@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Daily Nutrition Report</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ================= NAVBAR ================= -->
+<div class="navbar">
+    <a href="/">Dashboard</a>
+    <a href="/food">Food</a>
+    <a href="/report">Report</a>
+</div>
+
+<div class="container">
+
+    <h1>Daily Nutrition Report</h1>
+
+    <!-- ================= MEAL-WISE BREAKDOWN ================= -->
+    <div class="card">
+        <h2>Meal-wise Breakdown</h2>
+
+        {% if meals %}
+        <table>
+            <tr>
+                <th>Meal</th>
+                <th>Calories</th>
+                <th>Protein (g)</th>
+                <th>Fat (g)</th>
+                <th>Sugar (g)</th>
+            </tr>
+
+            {% for m in meals %}
+            <tr>
+                <td>{{ m.meal }}</td>
+                <td>{{ m.cal or 0 }}</td>
+                <td>{{ m.protein or 0 }}</td>
+                <td>{{ m.fat or 0 }}</td>
+                <td>{{ m.sugar or 0 }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+            <p>No food logged for today.</p>
+        {% endif %}
+    </div>
+
+    <!-- ================= DAILY TOTALS ================= -->
+    <div class="card">
+        <h2>Daily Totals</h2>
+
+        <div class="stats">
+            <div class="stat-box">
+                <p>Calories</p>
+                <h3>{{ totals.cal or 0 }}</h3>
+            </div>
+            <div class="stat-box">
+                <p>Protein (g)</p>
+                <h3>{{ totals.protein or 0 }}</h3>
+            </div>
+            <div class="stat-box">
+                <p>Fat (g)</p>
+                <h3>{{ totals.fat or 0 }}</h3>
+            </div>
+            <div class="stat-box">
+                <p>Sugar (g)</p>
+                <h3>{{ totals.sugar or 0 }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= GOAL PROGRESS ================= -->
+    <div class="card">
+        <h2>Goal Progress</h2>
+
+        <!-- Calories Progress -->
+        <div class="progress-group">
+            <div class="progress-label">
+                <span>Calories</span>
+                <span>{{ totals.cal or 0 }} / {{ goals.calories }} kcal</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill
+                    {% if totals.cal and totals.cal > goals.calories %}over{% endif %}"
+                    style="width: {{ ((totals.cal or 0) / goals.calories * 100) | round(1) }}%;">
+                </div>
+            </div>
+        </div>
+
+        <!-- Protein Progress -->
+        <div class="progress-group">
+            <div class="progress-label">
+                <span>Protein</span>
+                <span>{{ totals.protein or 0 }} / {{ goals.protein }} g</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill"
+                    style="width: {{ ((totals.protein or 0) / goals.protein * 100) | round(1) }}%;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>
