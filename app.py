@@ -264,5 +264,4 @@ def report():
 
 if __name__ == "__main__":
     init_db()
-    app.run()
-
+    app.run(debug=True)
