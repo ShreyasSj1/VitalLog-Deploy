@@ -10,27 +10,32 @@
 
 <!-- NAVBAR -->
 <div class="navbar">
-    <a href="/">Dashboard</a>
-    <a href="/food">Food</a>
-    <a href="/sleep" class="active">Sleep</a>
-    <a href="/wellbeing">Well-being</a>
-    <a href="/report">Report</a>
+    <div class="nav-left">
+        <a href="/">Dashboard</a>
+        <a href="/food">Food</a>
+        <a href="/sleep">Sleep</a>
+        <a href="/wellbeing">Well-being</a>
+        <a href="/report">Report</a>
+    </div>
+
+    <button id="themeToggle" class="theme-btn">🌙 Dark</button>
 </div>
 
 <div class="page-container">
 
     <!-- DATE CONTROL -->
     <div class="date-control">
-        <form method="get" action="/sleep" class="date-form">
+        <form method="get" class="date-form">
             <input
                 type="date"
                 name="date"
                 value="{{ selected_date }}"
                 onchange="this.form.submit()"
+                class="date-input"
             >
         </form>
 
-        <a href="/sleep" class="today-pill">📅 Today</a>
+        <a href="/sleep" class="today-btn">📅 Today</a>
     </div>
 
     <!-- SLEEP FORM -->
@@ -48,7 +53,6 @@
                     step="0.1"
                     min="0"
                     placeholder="e.g. 7.5"
-                    value="{{ sleep.hours if sleep }}"
                     required
                 >
             </div>
@@ -58,11 +62,7 @@
                 <select name="quality" required>
                     <option value="">Select</option>
                     {% for i in range(1, 6) %}
-                        <option value="{{ i }}"
-                            {% if sleep and sleep.quality == i %}selected{% endif %}
-                        >
-                            {{ i }} ⭐
-                        </option>
+                        <option value="{{ i }}">{{ i }} ⭐</option>
                     {% endfor %}
                 </select>
             </div>
@@ -73,41 +73,64 @@
                     name="notes"
                     rows="4"
                     placeholder="How did you sleep?"
-                >{{ sleep.notes if sleep }}</textarea>
+                ></textarea>
             </div>
 
             <div class="form-actions">
                 <button type="submit" class="primary-btn">
                     💾 Save Sleep
                 </button>
-
-                {% if sleep %}
-                <a href="/sleep/delete?date={{ selected_date }}"
-                   class="secondary-btn danger">
-                    🗑 Delete
-                </a>
-                {% endif %}
             </div>
-
         </form>
     </div>
 
     <!-- SLEEP SUMMARY -->
     {% if sleep %}
-    <div class="card">
-        <h3>Sleep Summary</h3>
+    <div class="card sleep-summary">
+        <div class="summary-left">
+            <h3>Sleep Summary</h3>
+            <p><strong>Duration:</strong> {{ sleep.hours }} hrs</p>
+            <p><strong>Quality:</strong> {{ sleep.quality }} ⭐</p>
 
-        <p><strong>Duration:</strong> {{ sleep.hours }} hrs</p>
-        <ps></s>
-        <p><strong>Quality:</strong> {{ sleep.quality }} ⭐</p>
+            {% if sleep.notes %}
+                <p><strong>Notes:</strong> {{ sleep.notes }}</p>
+            {% endif %}
+        </div>
 
-        {% if sleep.notes %}
-            <p><strong>Notes:</strong> {{ sleep.notes }}</p>
-        {% endif %}
+        <div class="summary-right">
+            <a href="/sleep/delete?date={{ selected_date }}"
+               class="icon-btn danger"
+               title="Delete Sleep Log">
+                🗑
+            </a>
+        </div>
     </div>
     {% endif %}
 
 </div>
+
+<!-- THEME SCRIPT -->
+<script>
+const toggleBtn = document.getElementById("themeToggle");
+
+// Load saved theme
+if (localStorage.getItem("theme") === "dark") {
+    document.body.classList.add("dark");
+    toggleBtn.innerText = "☀️ Light";
+}
+
+toggleBtn.addEventListener("click", () => {
+    document.body.classList.add("theme-switching");
+
+    setTimeout(() => {
+        document.body.classList.toggle("dark");
+        const isDark = document.body.classList.contains("dark");
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+        toggleBtn.innerText = isDark ? "☀️ Light" : "🌙 Dark";
+        document.body.classList.remove("theme-switching");
+    }, 150);
+});
+</script>
 
 </body>
 </html>

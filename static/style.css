@@ -1,3 +1,22 @@
+
+/* Smooth theme transition */
+* {
+    transition:
+        background-color 0.35s ease,
+        color 0.35s ease,
+        border-color 0.35s ease,
+        box-shadow 0.35s ease;
+}
+
+body {
+    transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+body.theme-switching {
+    opacity: 0.95;
+}
+
+
 /* ================= RESET ================= */
 * {
     margin: 0;
@@ -236,3 +255,200 @@ body.dark .navbar a.active {
 body.dark .today-pill {
     background: #6366f1;
 }
+
+/* ========== DARK MODE ========== */
+body.dark {
+    background: radial-gradient(circle at top, #0b1220, #05080f);
+    color: #e5e7eb;
+}
+
+body.dark .navbar {
+    background: linear-gradient(90deg, #020617, #020617);
+}
+
+body.dark .card {
+    background: #111827;
+    border: 1px solid #1f2937;
+}
+
+body.dark input,
+body.dark select,
+body.dark textarea {
+    background: #020617;
+    color: #e5e7eb;
+    border: 1px solid #334155;
+}
+
+body.dark table th {
+    background: #020617;
+}
+
+body.dark table td {
+    border-color: #1f2937;
+}
+
+body.dark canvas {
+    background: transparent;
+}
+
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* key line */
+    padding: 14px 24px;
+}
+
+.nav-left {
+    display: flex;
+    gap: 20px;
+}
+
+.theme-btn {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid #6366f1;
+    background: transparent;
+    color: #e5e7eb;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.theme-btn:hover {
+    background: rgba(99, 102, 241, 0.15);
+}
+
+/* DATE BAR */
+.date-control {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 26px;
+}
+
+/* DATE INPUT */
+.date-input {
+    height: 46px;
+    padding: 0 14px;
+    font-size: 15px;
+    border-radius: 10px;
+    border: 1px solid #c7d2fe;
+
+    display: flex;
+    align-items: center;
+
+    box-sizing: border-box;
+    line-height: 1;
+
+    /* 🔑 THIS fixes the visual drop */
+    position: relative;
+    top: -1px;
+}
+
+/* TODAY BUTTON */
+.today-btn {
+    height: 46px;
+    padding: 0 20px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    font-size: 15px;
+    font-weight: 500;
+
+    border-radius: 999px;
+    background: #4f6cff;
+    color: white;
+    text-decoration: none;
+
+    box-sizing: border-box;
+    line-height: 1;
+
+    transition: all 0.25s ease;
+}
+
+.today-btn:hover {
+    background: #3b5bff;
+    transform: translateY(-1px);
+}
+
+body.dark .date-input {
+    background: #0f172a;
+    border-color: #334155;
+    color: #e5e7eb;
+}
+
+body.dark .today-btn {
+    background: #6366f1;
+}
+
+body.dark .today-btn:hover {
+    background: #818cf8;
+}
+
+.sleep-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.summary-left {
+    max-width: 85%;
+}
+
+.summary-right {
+    display: flex;
+    align-items: center;
+}
+
+.icon-btn {
+    background: #f1f3f5;
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 20px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+    background: #ffe3e3;
+}
+
+.icon-btn.danger {
+    color: #c92a2a;
+}
+
+/* Action icons (Food Log) */
+.action-cell {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+
+.action-btn {
+    font-size: 1.4rem;          /* 🔥 Bigger icons */
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.action-btn:hover {
+    background: rgba(79, 108, 255, 0.12);
+    transform: scale(1.1);
+}
+
+.edit-btn {
+    color: #4f6cff;
+}
+
+.delete-btn {
+    color: #ef4444;
+}
+
+.delete-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+

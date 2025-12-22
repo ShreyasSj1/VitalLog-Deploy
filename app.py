@@ -5,50 +5,45 @@ from datetime import date, datetime, timedelta
 app = Flask(__name__)
 DB_NAME = "fitness.db"
 
-# ------------------ DAILY GOALS ------------------
+# ================= DAILY GOALS =================
 DAILY_GOALS = {
     "calories": 2200,
     "protein": 120
 }
 
-# ------------------ FOOD DATA ------------------
-# (calories, protein, fat, sugar)
+# ================= FOOD DATA =================
+# (calories, protein, fat, sugar) per unit
 FOOD_DATA = {
     "Breakfast": {
         "Idli": (45, 2, 0.2, 0),
         "Dosa (Plain)": (130, 3, 4, 0.5),
         "Masala Dosa": (275, 5, 11, 2),
-        "Vada (Medu)": (150, 4, 9, 0),
-        "Poha": (165, 3, 6, 2),
         "Upma": (140, 3.5, 5, 1),
-        "Tea / Coffee": (90, 2.5, 3, 7),
-        "OTHERS": (0, 0, 0, 0)
+        "Poha": (165, 3, 6, 2),
+        "Tea / Coffee": (90, 2.5, 3, 7)
     },
     "Lunch": {
         "Chapati": (90, 3, 3, 0),
-        "Rajma Masala": (130, 6, 5, 1),
-        "Chana Masala": (140, 6, 6, 1),
         "Veg Pulao": (150, 3, 5, 0.5),
         "Curd Rice": (130, 4, 6, 1),
-        "OTHERS": (0, 0, 0, 0)
+        "Aloo Paratha": (240, 5, 10, 1),
+        "Chicken Curry": (300, 25, 15, 1)
     },
     "Snacks": {
         "Samosa": (265, 4, 16, 1),
         "Veg Puff": (275, 5, 18, 3),
         "Veg Burger": (400, 10, 15, 7),
-        "Bhel Puri": (275, 6, 10, 6),
-        "OTHERS": (0, 0, 0, 0)
+        "Bhel Puri": (275, 6, 10, 6)
     },
     "Dinner": {
         "Plain Rice": (130, 2.7, 0.3, 0),
         "Paneer Butter Masala": (265, 10, 20, 3),
-        "Jeera Rice": (160, 3, 5, 0),
-        "Chicken Curry": (300, 25, 15, 1),
-        "OTHERS": (0, 0, 0, 0)
+        "Rasam": (50, 1, 2, 1.5),
+        "Jeera Rice": (160, 3, 5, 0)
     }
 }
 
-# ------------------ DB HELPERS ------------------
+# ================= DB HELPERS =================
 def get_db():
     db = sqlite3.connect(DB_NAME)
     db.row_factory = sqlite3.Row
@@ -73,7 +68,8 @@ def init_db():
 
     db.execute("""
         CREATE TABLE IF NOT EXISTS sleep_log (
-            date TEXT PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT UNIQUE,
             hours REAL,
             quality INTEGER,
             notes TEXT
@@ -92,37 +88,50 @@ def init_db():
     db.commit()
     db.close()
 
-# ------------------ DASHBOARD ------------------
+# ================= UTIL =================
+def get_week_dates(selected_date):
+    d = datetime.strptime(selected_date, "%Y-%m-%d")
+    start = d - timedelta(days=6)
+    return [(start + timedelta(days=i)).date().isoformat() for i in range(7)]
+
+# ================= DASHBOARD =================
 @app.route("/")
 def index():
     selected_date = request.args.get("date", date.today().isoformat())
+    week = get_week_dates(selected_date)
+
     db = get_db()
 
     totals = db.execute("""
-        SELECT
-            SUM(calories) cal,
-            SUM(protein) protein,
-            SUM(fat) fat,
-            SUM(sugar) sugar
+        SELECT 
+            COALESCE(SUM(calories),0) cal,
+            COALESCE(SUM(protein),0) protein,
+            COALESCE(SUM(fat),0) fat,
+            COALESCE(SUM(sugar),0) sugar
         FROM food_log WHERE date=?
     """, (selected_date,)).fetchone()
 
-    end = datetime.fromisoformat(selected_date)
-    start = end - timedelta(days=6)
-    week = [(start + timedelta(days=i)).date().isoformat() for i in range(7)]
-
-    weekly_cal, weekly_sleep, weekly_wellbeing = [], [], []
+    weekly_cal = []
+    weekly_sleep = []
+    weekly_wellbeing = []
 
     for d in week:
-        weekly_cal.append(
-            db.execute("SELECT SUM(calories) FROM food_log WHERE date=?", (d,)).fetchone()[0] or 0
-        )
-        s = db.execute("SELECT hours FROM sleep_log WHERE date=?", (d,)).fetchone()
-        weekly_sleep.append(s["hours"] if s else 0)
+        c = db.execute(
+            "SELECT COALESCE(SUM(calories),0) FROM food_log WHERE date=?",
+            (d,)
+        ).fetchone()[0]
+        s = db.execute(
+            "SELECT hours FROM sleep_log WHERE date=?",
+            (d,)
+        ).fetchone()
+        w = db.execute(
+            "SELECT COALESCE(SUM(minutes),0) FROM wellbeing_log WHERE date=?",
+            (d,)
+        ).fetchone()[0]
 
-        weekly_wellbeing.append(
-            db.execute("SELECT SUM(minutes) FROM wellbeing_log WHERE date=?", (d,)).fetchone()[0] or 0
-        )
+        weekly_cal.append(c)
+        weekly_sleep.append(s["hours"] if s else 0)
+        weekly_wellbeing.append(w)
 
     db.close()
 
@@ -137,65 +146,75 @@ def index():
         weekly_wellbeing=weekly_wellbeing
     )
 
-# ------------------ FOOD ------------------
+# ================= FOOD =================
 @app.route("/food", methods=["GET", "POST"])
 def food():
-    selected_date = request.args.get("date", date.today().isoformat())
     db = get_db()
 
+    selected_date = request.args.get(
+        "date",
+        request.form.get("date", date.today().isoformat())
+    )
+
     if request.method == "POST":
-        log_date = request.form["date"]
         meal = request.form["meal"]
         food_item = request.form["food"]
-        qty = float(request.form["qty"])
+        qty = float(request.form.get("qty", 1))
 
-        if food_item == "OTHERS":
-            name = request.form["other_name"]
-            calories = float(request.form["other_cal"])
-            protein = float(request.form["other_protein"])
-            fat = float(request.form["other_fat"])
-            sugar = float(request.form["other_sugar"])
-        else:
-            c, p, f, s = FOOD_DATA[meal][food_item]
-            name = food_item
-            calories, protein, fat, sugar = c*qty, p*qty, f*qty, s*qty
+        cal, pro, fat_, sug = FOOD_DATA[meal][food_item]
 
         db.execute("""
-            INSERT INTO food_log VALUES (NULL,?,?,?,?,?,?,?,?)
-        """, (log_date, meal, name, qty, calories, protein, fat, sugar))
+            INSERT INTO food_log
+            (date, meal, food, qty, calories, protein, fat, sugar)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            selected_date,
+            meal,
+            food_item,
+            qty,
+            cal * qty,
+            pro * qty,
+            fat_ * qty,
+            sug * qty
+        ))
 
         db.commit()
-        return redirect(url_for("food", date=log_date))
+        return redirect(url_for("food", date=selected_date))
 
-    logs = db.execute("""
-        SELECT * FROM food_log WHERE date=? ORDER BY id DESC
+    food_logs = db.execute("""
+        SELECT * FROM food_log
+        WHERE date = ?
+        ORDER BY id DESC
     """, (selected_date,)).fetchall()
 
     db.close()
 
-    return render_template("food.html",
-        food_logs=logs,
+    return render_template(
+        "food.html",
+        food_logs=food_logs,
         food_data=FOOD_DATA,
         selected_date=selected_date
     )
 
+
 @app.route("/food/delete/<int:id>")
 def delete_food(id):
+    selected_date = request.args.get("date", date.today().isoformat())
     db = get_db()
     db.execute("DELETE FROM food_log WHERE id=?", (id,))
     db.commit()
     db.close()
-    return redirect(request.referrer)
+    return redirect(url_for("food", date=selected_date))
 
-@app.route("/food/edit/<int:id>", methods=["GET","POST"])
+@app.route("/food/edit/<int:id>", methods=["GET", "POST"])
 def edit_food(id):
     db = get_db()
-    f = db.execute("SELECT * FROM food_log WHERE id=?", (id,)).fetchone()
+    food = db.execute("SELECT * FROM food_log WHERE id=?", (id,)).fetchone()
 
     if request.method == "POST":
         db.execute("""
-            UPDATE food_log SET
-            qty=?, calories=?, protein=?, fat=?, sugar=?
+            UPDATE food_log
+            SET qty=?, calories=?, protein=?, fat=?, sugar=?
             WHERE id=?
         """, (
             request.form["qty"],
@@ -206,66 +225,107 @@ def edit_food(id):
             id
         ))
         db.commit()
-        return redirect(url_for("food", date=f["date"]))
+        db.close()
+        return redirect(url_for("food", date=food["date"]))
 
     db.close()
-    return render_template("edit_food.html", f=f)
+    return render_template("edit_food.html", f=food)
 
-# ------------------ SLEEP ------------------
-@app.route("/sleep", methods=["GET","POST"])
+# ================= SLEEP =================
+@app.route("/sleep", methods=["GET", "POST"])
 def sleep():
     selected_date = request.args.get("date", date.today().isoformat())
     db = get_db()
 
     if request.method == "POST":
         db.execute("""
-            INSERT OR REPLACE INTO sleep_log VALUES (?,?,?,?)
+            INSERT INTO sleep_log (date, hours, quality, notes)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(date) DO UPDATE SET
+                hours=excluded.hours,
+                quality=excluded.quality,
+                notes=excluded.notes
         """, (
             request.form["date"],
-            request.form["hours"],
-            request.form["quality"],
-            request.form.get("notes","")
+            float(request.form["hours"]),
+            int(request.form["quality"]),
+            request.form.get("notes", "")
         ))
+
         db.commit()
+        db.close()
         return redirect(url_for("sleep", date=request.form["date"]))
 
     sleep_data = db.execute(
-        "SELECT * FROM sleep_log WHERE date=?", (selected_date,)
+        "SELECT * FROM sleep_log WHERE date=?",
+        (selected_date,)
     ).fetchone()
 
     db.close()
-    return render_template("sleep.html", sleep=sleep_data, selected_date=selected_date)
 
-# ------------------ WELLBEING ------------------
-@app.route("/wellbeing", methods=["GET","POST"])
+    return render_template(
+        "sleep.html",
+        sleep=sleep_data,
+        selected_date=selected_date
+    )
+
+@app.route("/sleep/delete")
+def delete_sleep():
+    selected_date = request.args.get("date", date.today().isoformat())
+    db = get_db()
+    db.execute("DELETE FROM sleep_log WHERE date=?", (selected_date,))
+    db.commit()
+    db.close()
+    return redirect(url_for("sleep", date=selected_date))
+
+# ================= WELL-BEING =================
+@app.route("/wellbeing", methods=["GET", "POST"])
 def wellbeing():
     selected_date = request.args.get("date", date.today().isoformat())
     db = get_db()
 
     if request.method == "POST":
-        activity = request.form["activity"]
-        if activity == "OTHERS":
-            activity = request.form["other_activity"]
-
         db.execute("""
-            INSERT INTO wellbeing_log VALUES (NULL,?,?,?)
-        """, (request.form["date"], activity, request.form["minutes"]))
+            INSERT INTO wellbeing_log (date, activity, minutes)
+            VALUES (?, ?, ?)
+        """, (
+            request.form["date"],
+            request.form["activity"],
+            int(request.form["minutes"])
+        ))
 
         db.commit()
         return redirect(url_for("wellbeing", date=request.form["date"]))
 
-    logs = db.execute(
-        "SELECT * FROM wellbeing_log WHERE date=? ORDER BY id DESC",
-        (selected_date,)
-    ).fetchall()
+    logs = db.execute("""
+        SELECT * FROM wellbeing_log
+        WHERE date=?
+        ORDER BY id DESC
+    """, (selected_date,)).fetchall()
 
     db.close()
-    return render_template("wellbeing.html", wellbeing_logs=logs, selected_date=selected_date)
 
-# ------------------ REPORT ------------------
+    return render_template(
+        "wellbeing.html",
+        wellbeing_logs=logs,
+        selected_date=selected_date
+    )
+
+@app.route("/wellbeing/delete/<int:id>")
+def delete_wellbeing(id):
+    selected_date = request.args.get("date", date.today().isoformat())
+    db = get_db()
+    db.execute("DELETE FROM wellbeing_log WHERE id=?", (id,))
+    db.commit()
+    db.close()
+    return redirect(url_for("wellbeing", date=selected_date))
+
+# ================= REPORT =================
 @app.route("/report")
 def report():
     selected_date = request.args.get("date", date.today().isoformat())
+    week = get_week_dates(selected_date)
+
     db = get_db()
 
     meals = db.execute("""
@@ -274,29 +334,27 @@ def report():
                SUM(protein) protein,
                SUM(fat) fat,
                SUM(sugar) sugar
-        FROM food_log WHERE date=?
+        FROM food_log
+        WHERE date=?
         GROUP BY meal
     """, (selected_date,)).fetchall()
-
-    end = datetime.fromisoformat(selected_date)
-    start = end - timedelta(days=6)
-    week = [(start + timedelta(days=i)).date().isoformat() for i in range(7)]
 
     weekly_cal, weekly_sleep, weekly_wellbeing = [], [], []
 
     for d in week:
         weekly_cal.append(
-            db.execute("SELECT SUM(calories) FROM food_log WHERE date=?", (d,)).fetchone()[0] or 0
+            db.execute("SELECT COALESCE(SUM(calories),0) FROM food_log WHERE date=?", (d,)).fetchone()[0]
         )
         s = db.execute("SELECT hours FROM sleep_log WHERE date=?", (d,)).fetchone()
         weekly_sleep.append(s["hours"] if s else 0)
         weekly_wellbeing.append(
-            db.execute("SELECT SUM(minutes) FROM wellbeing_log WHERE date=?", (d,)).fetchone()[0] or 0
+            db.execute("SELECT COALESCE(SUM(minutes),0) FROM wellbeing_log WHERE date=?", (d,)).fetchone()[0]
         )
 
     db.close()
 
-    return render_template("report.html",
+    return render_template(
+        "report.html",
         meals=meals,
         selected_date=selected_date,
         week=week,
@@ -305,6 +363,7 @@ def report():
         weekly_wellbeing=weekly_wellbeing
     )
 
+# ================= RUN =================
 if __name__ == "__main__":
     init_db()
-    app.run(port=5001, debug=True)
+    app.run(debug=True, port=5001)
