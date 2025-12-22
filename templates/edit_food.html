@@ -3,69 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <title>Edit Food</title>
+
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<!-- ===== NAVBAR ===== -->
+<!-- NAVBAR -->
 <div class="navbar">
-    <a href="/food?date={{ f.date }}">← Back</a>
+    <a href="/">Dashboard</a>
+    <a href="/food" class="active">Food</a>
+    <a href="/sleep">Sleep</a>
+    <a href="/wellbeing">Well-being</a>
+    <a href="/report">Report</a>
 </div>
 
-<!-- ===== PAGE CONTENT ===== -->
-<div class="container">
+<div class="page-container">
 
+    <!-- EDIT CARD -->
     <div class="card">
-        <h2>Edit {{ f.food }}</h2>
+        <h2>Edit Food Entry</h2>
 
         <form method="post">
 
-            <label>Quantity</label>
-            <input
-                type="number"
-                step="0.5"
-                name="qty"
-                value="{{ f.qty }}"
-                required
-            >
+            <div class="form-row">
+                <label>Food Item</label>
+                <input type="text" value="{{ f.food }}" disabled>
+            </div>
 
-            <label>Calories</label>
-            <input
-                type="number"
-                name="calories"
-                value="{{ f.calories }}"
-                required
-            >
+            <div class="form-row">
+                <label>Quantity</label>
+                <input
+                    type="number"
+                    step="0.1"
+                    name="qty"
+                    value="{{ f.qty }}"
+                    required
+                >
+            </div>
 
-            <label>Protein (g)</label>
-            <input
-                type="number"
-                name="protein"
-                value="{{ f.protein }}"
-                required
-            >
+            <div class="form-row">
+                <label>Calories</label>
+                <input
+                    type="number"
+                    step="0.1"
+                    name="calories"
+                    value="{{ f.calories }}"
+                    required
+                >
+            </div>
 
-            <label>Fat (g)</label>
-            <input
-                type="number"
-                name="fat"
-                value="{{ f.fat }}"
-                required
-            >
+            <div class="form-row">
+                <label>Protein (g)</label>
+                <input
+                    type="number"
+                    step="0.1"
+                    name="protein"
+                    value="{{ f.protein }}"
+                    required
+                >
+            </div>
 
-            <label>Sugar (g)</label>
-            <input
-                type="number"
-                name="sugar"
-                value="{{ f.sugar }}"
-                required
-            >
+            <div class="form-row">
+                <label>Fat (g)</label>
+                <input
+                    type="number"
+                    step="0.1"
+                    name="fat"
+                    value="{{ f.fat }}"
+                    required
+                >
+            </div>
 
-            <!-- ===== ACTIONS ===== -->
+            <div class="form-row">
+                <label>Sugar (g)</label>
+                <input
+                    type="number"
+                    step="0.1"
+                    name="sugar"
+                    value="{{ f.sugar }}"
+                    required
+                >
+            </div>
+
             <div class="form-actions">
-                <button type="submit" class="primary-btn save-btn">
-                    Save Changes
+                <button type="submit" class="primary-btn">
+                    💾 Save Changes
                 </button>
+
+                <a href="/food?date={{ f.date }}" class="secondary-btn">
+                    Cancel
+                </a>
             </div>
 
         </form>

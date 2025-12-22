@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Dashboard</title>
+
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -15,126 +16,134 @@
     <a href="/sleep">Sleep</a>
     <a href="/wellbeing">Well-being</a>
     <a href="/report">Report</a>
-    <button id="themeToggle" class="theme-toggle">🌙 Dark</button>
 </div>
 
-<div class="page-wrapper">
+<div class="page-container">
 
     <!-- DATE CONTROL -->
     <div class="date-control">
-        <form method="get" action="/">
-            <input type="date" name="date" value="{{ selected_date }}" onchange="this.form.submit()">
+        <form method="get" action="/" class="date-form">
+            <input
+                type="date"
+                name="date"
+                value="{{ selected_date }}"
+                onchange="this.form.submit()"
+            >
         </form>
-        <a href="/" class="today-pill">Today</a>
+
+        <a href="/" class="today-pill">📅 Today</a>
     </div>
 
-    <!-- DAILY SUMMARY -->
+    <!-- DAILY OVERVIEW -->
     <div class="card">
         <h2>Daily Overview</h2>
 
         <div class="stats-grid">
-            <div class="stat-card">
-                <h4>Calories</h4>
-                <p>{{ t.cal }} / {{ goals.calories }}</p>
+            <div class="stat-box">
+                <p>Calories</p>
+                <h3>{{ t.cal or 0 }}</h3>
             </div>
 
-            <div class="stat-card">
-                <h4>Protein</h4>
-                <p>{{ t.protein }} g</p>
+            <div class="stat-box">
+                <p>Protein (g)</p>
+                <h3>{{ t.protein or 0 }}</h3>
             </div>
 
-            <div class="stat-card">
-                <h4>Sleep</h4>
-                <p>{{ sleep.hours if sleep else "—" }} hrs</p>
+            <div class="stat-box">
+                <p>Fat (g)</p>
+                <h3>{{ t.fat or 0 }}</h3>
             </div>
 
-            <div class="stat-card">
-                <h4>Sleep Quality</h4>
-                <p>{{ sleep.quality if sleep else "—" }} ⭐</p>
-            </div>
-
-            <div class="stat-card">
-                <h4>Well-being</h4>
-                <p>{{ wellbeing.minutes }} min</p>
+            <div class="stat-box">
+                <p>Sugar (g)</p>
+                <h3>{{ t.sugar or 0 }}</h3>
             </div>
         </div>
     </div>
 
-    <!-- WEEKLY CHART -->
+    <!-- WEEKLY CHARTS -->
     <div class="card">
-        <h3>Weekly Health Overview</h3>
-        <canvas id="weeklyChart" height="120"></canvas>
+        <h2>Weekly Trends</h2>
+
+        <div class="chart-grid">
+            <div>
+                <h4>Calories</h4>
+                <canvas id="calorieChart"></canvas>
+            </div>
+
+            <div>
+                <h4>Sleep (hrs)</h4>
+                <canvas id="sleepChart"></canvas>
+            </div>
+
+            <div>
+                <h4>Well-being (min)</h4>
+                <canvas id="wellbeingChart"></canvas>
+            </div>
+        </div>
     </div>
 
 </div>
 
-<!-- WEEKLY CHART SCRIPT -->
+<!-- ================= CHART SCRIPTS ================= -->
 <script>
-const weeklyData = {
-    labels: [{% for d in weekly %}"{{ d.date[5:] }}",{% endfor %}],
-    calories: [{% for d in weekly %}{{ d.calories }},{% endfor %}],
-    sleep: [{% for d in weekly %}{{ d.sleep }},{% endfor %}],
-    wellbeing: [{% for d in weekly %}{{ d.wellbeing }},{% endfor %}]
-};
+const labels = {{ week | tojson }};
 
-new Chart(document.getElementById("weeklyChart"), {
+// Calories Chart
+new Chart(document.getElementById("calorieChart"), {
+    type: "bar",
     data: {
-        labels: weeklyData.labels,
-        datasets: [
-            {
-                type: 'bar',
-                label: 'Calories',
-                data: weeklyData.calories,
-                backgroundColor: 'rgba(99,102,241,0.6)',
-                yAxisID: 'y'
-            },
-            {
-                type: 'line',
-                label: 'Sleep (hrs)',
-                data: weeklyData.sleep,
-                borderColor: '#22c55e',
-                tension: 0.4,
-                yAxisID: 'y1'
-            },
-            {
-                type: 'line',
-                label: 'Well-being (min)',
-                data: weeklyData.wellbeing,
-                borderColor: '#facc15',
-                tension: 0.4,
-                yAxisID: 'y1'
-            }
-        ]
+        labels: labels,
+        datasets: [{
+            label: "Calories",
+            data: {{ weekly_cal | tojson }},
+            backgroundColor: "#4f6cff"
+        }]
     },
     options: {
         responsive: true,
-        interaction: { mode: 'index', intersect: false },
-        scales: {
-            y: { beginAtZero: true, title: { display: true, text: 'Calories' }},
-            y1: {
-                beginAtZero: true,
-                position: 'right',
-                title: { display: true, text: 'Sleep / Well-being' },
-                grid: { drawOnChartArea: false }
-            }
-        }
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
     }
 });
-</script>
 
-<!-- DARK MODE -->
-<script>
-const toggle = document.getElementById("themeToggle");
-if (localStorage.getItem("theme") === "dark") {
-    document.body.classList.add("dark");
-    toggle.innerText = "☀️ Light";
-}
-toggle.onclick = () => {
-    document.body.classList.toggle("dark");
-    const d = document.body.classList.contains("dark");
-    toggle.innerText = d ? "☀️ Light" : "🌙 Dark";
-    localStorage.setItem("theme", d ? "dark" : "light");
-};
+// Sleep Chart
+new Chart(document.getElementById("sleepChart"), {
+    type: "line",
+    data: {
+        labels: labels,
+        datasets: [{
+            label: "Sleep (hrs)",
+            data: {{ weekly_sleep | tojson }},
+            borderColor: "#22c55e",
+            tension: 0.4,
+            spanGaps: true
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true, max: 10 } }
+    }
+});
+
+// Well-being Chart
+new Chart(document.getElementById("wellbeingChart"), {
+    type: "line",
+    data: {
+        labels: labels,
+        datasets: [{
+            label: "Well-being (min)",
+            data: {{ weekly_wellbeing | tojson }},
+            borderColor: "#facc15",
+            tension: 0.4,
+            spanGaps: true
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true } }
+    }
+});
 </script>
 
 </body>

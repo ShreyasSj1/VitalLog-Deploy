@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Daily Report</title>
+
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -15,125 +16,139 @@
     <a href="/sleep">Sleep</a>
     <a href="/wellbeing">Well-being</a>
     <a href="/report" class="active">Report</a>
-    <button id="themeToggle" class="theme-toggle">🌙 Dark</button>
 </div>
 
-<div class="page-wrapper">
+<div class="page-container">
 
     <!-- DATE CONTROL -->
     <div class="date-control">
-        <form method="get" action="/report">
-            <input type="date" name="date" value="{{ selected_date }}" onchange="this.form.submit()">
+        <form method="get" action="/report" class="date-form">
+            <input
+                type="date"
+                name="date"
+                value="{{ selected_date }}"
+                onchange="this.form.submit()"
+            >
         </form>
-        <a href="/report" class="today-pill">Today</a>
+
+        <a href="/report" class="today-pill">📅 Today</a>
     </div>
 
-    <!-- MEAL REPORT -->
+    <!-- MEAL SUMMARY -->
     <div class="card">
-        <h3>Nutrition Breakdown</h3>
+        <h2>Meal-wise Nutrition Summary</h2>
 
         {% if meals %}
         <table class="log-table">
-            <tr>
-                <th>Meal</th>
-                <th>Calories</th>
-                <th>Protein</th>
-                <th>Fat</th>
-                <th>Sugar</th>
-            </tr>
-            {% for m in meals %}
-            <tr>
-                <td>{{ m.meal }}</td>
-                <td>{{ m.cal }}</td>
-                <td>{{ m.protein }}</td>
-                <td>{{ m.fat }}</td>
-                <td>{{ m.sugar }}</td>
-            </tr>
-            {% endfor %}
+            <thead>
+                <tr>
+                    <th>Meal</th>
+                    <th>Calories</th>
+                    <th>Protein (g)</th>
+                    <th>Fat (g)</th>
+                    <th>Sugar (g)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in meals %}
+                <tr>
+                    <td>{{ m.meal }}</td>
+                    <td>{{ m.cal }}</td>
+                    <td>{{ m.protein }}</td>
+                    <td>{{ m.fat }}</td>
+                    <td>{{ m.sugar }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
         </table>
         {% else %}
-        <p>No food logged.</p>
+            <p class="empty-state">No food logged for this date 🍽</p>
         {% endif %}
     </div>
 
-    <!-- SLEEP -->
+    <!-- WEEKLY CHARTS -->
     <div class="card">
-        <h3>Sleep Summary</h3>
-        {% if sleep %}
-            <p><strong>Hours:</strong> {{ sleep.hours }}</p>
-            <p><strong>Quality:</strong> {{ sleep.quality }} ⭐</p>
-            <p><strong>Notes:</strong> {{ sleep.notes or "—" }}</p>
-        {% else %}
-            <p>No sleep logged.</p>
-        {% endif %}
-    </div>
+        <h2>Weekly Trends</h2>
 
-    <!-- WELLBEING -->
-    <div class="card">
-        <h3>Well-being Activities</h3>
+        <div class="chart-grid">
+            <div>
+                <h4>Calories</h4>
+                <canvas id="calorieChart"></canvas>
+            </div>
 
-        {% if wellbeing_logs %}
-        <table class="log-table">
-            <tr>
-                <th>Activity</th>
-                <th>Minutes</th>
-            </tr>
-            {% for w in wellbeing_logs %}
-            <tr>
-                <td>{{ w.activity }}</td>
-                <td>{{ w.minutes }}</td>
-            </tr>
-            {% endfor %}
-        </table>
+            <div>
+                <h4>Sleep (hrs)</h4>
+                <canvas id="sleepChart"></canvas>
+            </div>
 
-        <p><strong>Total:</strong> {{ total_wellbeing }} minutes</p>
-        {% else %}
-        <p>No well-being logged.</p>
-        {% endif %}
-    </div>
-
-    <!-- WEEKLY CHART -->
-    <div class="card">
-        <h3>Weekly Health Overview</h3>
-        <canvas id="weeklyChart" height="120"></canvas>
+            <div>
+                <h4>Well-being (min)</h4>
+                <canvas id="wellbeingChart"></canvas>
+            </div>
+        </div>
     </div>
 
 </div>
 
-<!-- SAME WEEKLY CHART SCRIPT -->
+<!-- ================= CHART SCRIPTS ================= -->
 <script>
-const weeklyData = {
-    labels: [{% for d in weekly %}"{{ d.date[5:] }}",{% endfor %}],
-    calories: [{% for d in weekly %}{{ d.calories }},{% endfor %}],
-    sleep: [{% for d in weekly %}{{ d.sleep }},{% endfor %}],
-    wellbeing: [{% for d in weekly %}{{ d.wellbeing }},{% endfor %}]
-};
+const labels = {{ week | tojson }};
 
-new Chart(document.getElementById("weeklyChart"), {
+// Calories chart
+new Chart(document.getElementById("calorieChart"), {
+    type: "bar",
     data: {
-        labels: weeklyData.labels,
-        datasets: [
-            { type: 'bar', label: 'Calories', data: weeklyData.calories, backgroundColor: 'rgba(99,102,241,0.6)' },
-            { type: 'line', label: 'Sleep (hrs)', data: weeklyData.sleep, borderColor: '#22c55e', tension: 0.4 },
-            { type: 'line', label: 'Well-being (min)', data: weeklyData.wellbeing, borderColor: '#facc15', tension: 0.4 }
-        ]
+        labels: labels,
+        datasets: [{
+            label: "Calories",
+            data: {{ weekly_cal | tojson }},
+            backgroundColor: "#4f6cff"
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
     }
 });
-</script>
 
-<!-- DARK MODE -->
-<script>
-const toggle = document.getElementById("themeToggle");
-if (localStorage.getItem("theme") === "dark") {
-    document.body.classList.add("dark");
-    toggle.innerText = "☀️ Light";
-}
-toggle.onclick = () => {
-    document.body.classList.toggle("dark");
-    const d = document.body.classList.contains("dark");
-    toggle.innerText = d ? "☀️ Light" : "🌙 Dark";
-    localStorage.setItem("theme", d ? "dark" : "light");
-};
+// Sleep chart
+new Chart(document.getElementById("sleepChart"), {
+    type: "line",
+    data: {
+        labels: labels,
+        datasets: [{
+            label: "Sleep (hrs)",
+            data: {{ weekly_sleep | tojson }},
+            borderColor: "#22c55e",
+            tension: 0.4,
+            spanGaps: true
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true, max: 10 } }
+    }
+});
+
+// Well-being chart
+new Chart(document.getElementById("wellbeingChart"), {
+    type: "line",
+    data: {
+        labels: labels,
+        datasets: [{
+            label: "Well-being (min)",
+            data: {{ weekly_wellbeing | tojson }},
+            borderColor: "#facc15",
+            tension: 0.4,
+            spanGaps: true
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true } }
+    }
+});
 </script>
 
 </body>
