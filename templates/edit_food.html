@@ -1,38 +1,77 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Edit Food</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+
+<!-- ===== NAVBAR ===== -->
 <div class="navbar">
-    <a href="/">Dashboard</a>
-    <a href="/food">Food</a>
-    <a href="/report">Report</a>
+    <a href="/food?date={{ f.date }}">← Back</a>
 </div>
 
-<h2>Edit Food Entry</h2>
+<!-- ===== PAGE CONTENT ===== -->
+<div class="container">
 
-<form method="POST">
-    <label>Quantity</label><br>
-    <input type="number" step="0.1" name="qty" value="{{ item.qty }}"><br><br>
+    <div class="card">
+        <h2>Edit {{ f.food }}</h2>
 
-    <label>Calories</label><br>
-    <input type="number" step="0.1" name="calories" value="{{ item.calories }}"><br><br>
+        <form method="post">
 
-    <label>Protein</label><br>
-    <input type="number" step="0.1" name="protein" value="{{ item.protein }}"><br><br>
+            <label>Quantity</label>
+            <input
+                type="number"
+                step="0.5"
+                name="qty"
+                value="{{ f.qty }}"
+                required
+            >
 
-    <label>Fat</label><br>
-    <input type="number" step="0.1" name="fat" value="{{ item.fat }}"><br><br>
+            <label>Calories</label>
+            <input
+                type="number"
+                name="calories"
+                value="{{ f.calories }}"
+                required
+            >
 
-    <label>Sugar</label><br>
-    <input type="number" step="0.1" name="sugar" value="{{ item.sugar }}"><br><br>
+            <label>Protein (g)</label>
+            <input
+                type="number"
+                name="protein"
+                value="{{ f.protein }}"
+                required
+            >
 
-    <button type="submit">Save Changes</button>
-</form>
+            <label>Fat (g)</label>
+            <input
+                type="number"
+                name="fat"
+                value="{{ f.fat }}"
+                required
+            >
 
-<hr>
-<a href="/food">⬅ Back</a>
+            <label>Sugar (g)</label>
+            <input
+                type="number"
+                name="sugar"
+                value="{{ f.sugar }}"
+                required
+            >
+
+            <!-- ===== ACTIONS ===== -->
+            <div class="form-actions">
+                <button type="submit" class="primary-btn save-btn">
+                    Save Changes
+                </button>
+            </div>
+
+        </form>
+    </div>
+
+</div>
 
 </body>
 </html>

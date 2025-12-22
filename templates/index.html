@@ -1,26 +1,42 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
     <title>Dashboard</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<!-- ================= NAVBAR ================= -->
 <div class="navbar">
     <a href="/">Dashboard</a>
     <a href="/food">Food</a>
+    <a href="/sleep">Sleep</a>
+    <a href="/wellbeing">Well-being</a>
     <a href="/report">Report</a>
+
+    <button id="themeToggle" class="theme-toggle">🌙 Dark</button>
 </div>
+
 
 <div class="container">
 
-    <h1>Today’s Dashboard</h1>
+    <!-- Date Navigation -->
+    <div class="date-control">
+    <form method="get" action="/">
+        <input
+            type="date"
+            name="date"
+            value="{{ selected_date }}"
+            onchange="this.form.submit()"
+        >
+    </form>
 
-    <!-- ================= SUMMARY STATS ================= -->
+    <a href="/" class="today-pill">Today</a>
+</div>
+
+
+    <!-- Daily Overview -->
     <div class="card">
-        <h2>Nutrition Summary</h2>
+        <h2>Daily Overview</h2>
 
         <div class="stats">
             <div class="stat-box">
@@ -42,39 +58,51 @@
         </div>
     </div>
 
-    <!-- ================= PROGRESS BARS ================= -->
-    <div class="card">
-        <h2>Daily Goal Progress</h2>
-
-        <!-- Calories Progress -->
-        <div class="progress-group">
-            <div class="progress-label">
-                <span>Calories</span>
-                <span>{{ t.cal or 0 }} / {{ goals.calories }} kcal</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill
-                    {% if t.cal and t.cal > goals.calories %}over{% endif %}"
-                    style="width: {{ ((t.cal or 0) / goals.calories * 100) | round(1) }}%;">
-                </div>
-            </div>
-        </div>
-
-        <!-- Protein Progress -->
-        <div class="progress-group">
-            <div class="progress-label">
-                <span>Protein</span>
-                <span>{{ t.protein or 0 }} / {{ goals.protein }} g</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill"
-                    style="width: {{ ((t.protein or 0) / goals.protein * 100) | round(1) }}%;">
-                </div>
-            </div>
-        </div>
+        <div class="stat-card">
+        <h4>Sleep (hrs)</h4>
+        <p>{{ sleep.hours if sleep else "—" }}</p>
     </div>
 
+    <div class="stat-card">
+        <h4>Sleep Quality</h4>
+        <p>
+            {% if sleep %}
+                {{ sleep.quality }} ⭐
+            {% else %}
+                —
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="stat-card">
+        <h4>Well-being</h4>
+        <p>{{ wellbeing.minutes }} min</p>
+    </div>
+
+
 </div>
+
+<script>
+    const toggle = document.getElementById("themeToggle");
+
+    // Load saved theme
+    if (localStorage.getItem("theme") === "dark") {
+        document.body.classList.add("dark");
+        toggle.textContent = "☀️ Light";
+    }
+
+    toggle.addEventListener("click", () => {
+        document.body.classList.toggle("dark");
+
+        if (document.body.classList.contains("dark")) {
+            localStorage.setItem("theme", "dark");
+            toggle.textContent = "☀️ Light";
+        } else {
+            localStorage.setItem("theme", "light");
+            toggle.textContent = "🌙 Dark";
+        }
+    });
+</script>
 
 </body>
 </html>

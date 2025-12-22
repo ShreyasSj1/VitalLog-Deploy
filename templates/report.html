@@ -1,32 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Daily Nutrition Report</title>
+    <title>Daily Report</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
 
-<!-- ================= NAVBAR ================= -->
 <div class="navbar">
     <a href="/">Dashboard</a>
     <a href="/food">Food</a>
+    <a href="/sleep">Sleep</a>
+    <a href="/wellbeing">Well-being</a>
     <a href="/report">Report</a>
+
+    <button id="themeToggle" class="theme-toggle">🌙 Dark</button>
 </div>
+
 
 <div class="container">
 
-    <h1>Daily Nutrition Report</h1>
+    <!-- Date Navigation -->
+   <div class="date-control">
+    <form method="get" action="/report">
+        <input
+            type="date"
+            name="date"
+            value="{{ selected_date }}"
+            onchange="this.form.submit()"
+        >
+    </form>
 
-    <!-- ================= MEAL-WISE BREAKDOWN ================= -->
+    <a href="/report" class="today-pill">Today</a>
+</div>
+
+
     <div class="card">
-        <h2>Meal-wise Breakdown</h2>
+        <h2>Meal-wise Summary</h2>
 
         {% if meals %}
         <table>
             <tr>
                 <th>Meal</th>
-                <th>Calories</th>
+                <th>Calories (kcal)</th>
                 <th>Protein (g)</th>
                 <th>Fat (g)</th>
                 <th>Sugar (g)</th>
@@ -43,67 +59,76 @@
             {% endfor %}
         </table>
         {% else %}
-            <p>No food logged for today.</p>
+        <p>No data for this date 📅</p>
         {% endif %}
     </div>
 
-    <!-- ================= DAILY TOTALS ================= -->
     <div class="card">
-        <h2>Daily Totals</h2>
+    <h3>Sleep Summary</h3>
 
-        <div class="stats">
-            <div class="stat-box">
-                <p>Calories</p>
-                <h3>{{ totals.cal or 0 }}</h3>
-            </div>
-            <div class="stat-box">
-                <p>Protein (g)</p>
-                <h3>{{ totals.protein or 0 }}</h3>
-            </div>
-            <div class="stat-box">
-                <p>Fat (g)</p>
-                <h3>{{ totals.fat or 0 }}</h3>
-            </div>
-            <div class="stat-box">
-                <p>Sugar (g)</p>
-                <h3>{{ totals.sugar or 0 }}</h3>
-            </div>
-        </div>
+        {% if sleep %}
+            <p><strong>Duration:</strong> {{ sleep.hours }} hrs</p>
+            <p><strong>Quality:</strong> {{ sleep.quality }} ⭐</p>
+            <p><strong>Notes:</strong> {{ sleep.notes or "—" }}</p>
+        {% else %}
+        <p>No sleep data logged 😴</p>
+        {% endif %}
     </div>
 
-    <!-- ================= GOAL PROGRESS ================= -->
     <div class="card">
-        <h2>Goal Progress</h2>
+    <h3>Well-being Activities</h3>
 
-        <!-- Calories Progress -->
-        <div class="progress-group">
-            <div class="progress-label">
-                <span>Calories</span>
-                <span>{{ totals.cal or 0 }} / {{ goals.calories }} kcal</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill
-                    {% if totals.cal and totals.cal > goals.calories %}over{% endif %}"
-                    style="width: {{ ((totals.cal or 0) / goals.calories * 100) | round(1) }}%;">
-                </div>
-            </div>
-        </div>
+        {% if wellbeing_logs %}
+            <table class="log-table">
+            <thead>
+                <tr>
+                    <th>Activity</th>
+                    <th>Minutes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for w in wellbeing_logs %}
+                <tr>
+                    <td>{{ w.activity }}</td>
+                    <td>{{ w.minutes }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            </table>
 
-        <!-- Protein Progress -->
-        <div class="progress-group">
-            <div class="progress-label">
-                <span>Protein</span>
-                <span>{{ totals.protein or 0 }} / {{ goals.protein }} g</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill"
-                    style="width: {{ ((totals.protein or 0) / goals.protein * 100) | round(1) }}%;">
-                </div>
-            </div>
-        </div>
+            <p class="total-line">
+                <strong>Total:</strong> {{ total_wellbeing }} minutes
+            </p>
+        {% else %}
+            <p>No well-being logged 🌱</p>
+        {% endif %}
     </div>
+
+
 
 </div>
+
+<script>
+    const toggle = document.getElementById("themeToggle");
+
+    // Load saved theme
+    if (localStorage.getItem("theme") === "dark") {
+        document.body.classList.add("dark");
+        toggle.textContent = "☀️ Light";
+    }
+
+    toggle.addEventListener("click", () => {
+        document.body.classList.toggle("dark");
+
+        if (document.body.classList.contains("dark")) {
+            localStorage.setItem("theme", "dark");
+            toggle.textContent = "☀️ Light";
+        } else {
+            localStorage.setItem("theme", "light");
+            toggle.textContent = "🌙 Dark";
+        }
+    });
+</script>
 
 </body>
 </html>

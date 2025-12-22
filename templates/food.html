@@ -1,71 +1,110 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Food Logger</title>
+    <title>Food Tracker</title>
     <link rel="stylesheet" href="/static/style.css">
+
+    <!-- Simple JS for OTHERS toggle -->
+    <script>
+        function toggleOthers(select) {
+            const othersBox = document.getElementById("others-box");
+            if (select.value === "OTHERS") {
+                othersBox.style.display = "block";
+            } else {
+                othersBox.style.display = "none";
+            }
+        }
+    </script>
 </head>
+
 <body>
 
-<!-- ================= NAVBAR ================= -->
 <div class="navbar">
     <a href="/">Dashboard</a>
     <a href="/food">Food</a>
+    <a href="/sleep">Sleep</a>
+    <a href="/wellbeing">Well-being</a>
     <a href="/report">Report</a>
+
+    <button id="themeToggle" class="theme-toggle">🌙 Dark</button>
 </div>
+
 
 <div class="container">
 
-    <!-- ================= ADD FOOD ================= -->
+    <!-- Date Navigation -->
+    <div class="date-control">
+    <form method="get" action="/food">
+        <input
+            type="date"
+            name="date"
+            value="{{ selected_date }}"
+            onchange="this.form.submit()"
+        >
+    </form>
+
+    <a href="/food" class="today-pill">Today</a>
+    </div>
+
+
+
+    <!-- Add Food -->
     <div class="card">
         <h2>Add Food</h2>
 
-        <form method="POST">
+        <form method="post">
+            <input type="hidden" name="date" value="{{ selected_date }}">
 
+            <!-- Meal -->
             <label>Meal</label>
-            <select name="meal" id="meal" required>
-                <option value="">-- Select Meal --</option>
-                <option>Breakfast</option>
-                <option>Lunch</option>
-                <option>Snacks</option>
-                <option>Dinner</option>
+            <select name="meal" required>
+                {% for meal in food_data.keys() %}
+                <option value="{{ meal }}">{{ meal }}</option>
+                {% endfor %}
             </select>
 
+            <!-- Food Item -->
             <label>Food Item</label>
-            <select name="food" id="food" required disabled>
-                <option value="">-- Select Food --</option>
+            <select name="food" required onchange="toggleOthers(this)">
+                {% for meal, items in food_data.items() %}
+                    <optgroup label="{{ meal }}">
+                        {% for item in items %}
+                        <option value="{{ item }}">{{ item }}</option>
+                        {% endfor %}
+                    </optgroup>
+                {% endfor %}
+                <option value="OTHERS">OTHERS</option>
             </select>
 
-            <div id="qty_block">
-                <label>Quantity (servings)</label>
-                <input type="number" step="0.5" min="0.5" name="qty" value="1">
-            </div>
+            <!-- Quantity -->
+            <label>Quantity</label>
+            <input type="number" step="0.5" name="qty" value="1">
 
-            <!-- Manual entry -->
-            <div id="others_block" style="display:none;">
+            <!-- OTHERS INPUTS (HIDDEN BY DEFAULT) -->
+            <div id="others-box" style="display:none; margin-top:15px;">
                 <label>Food Name</label>
-                <input type="text" name="other_name">
+                <input name="other_name" placeholder="Enter food name">
 
-                <label>Calories (kcal)</label>
-                <input type="number" step="0.1" name="other_cal">
+                <label>Calories</label>
+                <input type="number" name="other_cal" placeholder="Calories">
 
                 <label>Protein (g)</label>
-                <input type="number" step="0.1" name="other_protein">
+                <input type="number" name="other_protein" placeholder="Protein">
 
                 <label>Fat (g)</label>
-                <input type="number" step="0.1" name="other_fat">
+                <input type="number" name="other_fat" placeholder="Fat">
 
                 <label>Sugar (g)</label>
-                <input type="number" step="0.1" name="other_sugar">
+                <input type="number" name="other_sugar" placeholder="Sugar">
             </div>
 
-            <button type="submit">Add Food</button>
+            <button class="primary-btn">Add Food</button>
         </form>
     </div>
 
-    <!-- ================= LOGGED FOOD ================= -->
+    <!-- Logged Food -->
     <div class="card">
-        <h2>Food Logged Today</h2>
+        <h2>Logged Food</h2>
 
         {% if food_logs %}
         <table>
@@ -74,9 +113,6 @@
                 <th>Food</th>
                 <th>Qty</th>
                 <th>Calories</th>
-                <th>Protein</th>
-                <th>Fat</th>
-                <th>Sugar</th>
                 <th>Actions</th>
             </tr>
 
@@ -85,95 +121,51 @@
                 <td>{{ f.meal }}</td>
                 <td>{{ f.food }}</td>
                 <td>{{ f.qty }}</td>
-                <td>{{ "%.1f"|format(f.calories) }}</td>
-                <td>{{ "%.1f"|format(f.protein) }}</td>
-                <td>{{ "%.1f"|format(f.fat) }}</td>
-                <td>{{ "%.1f"|format(f.sugar) }}</td>
-                <td>
-                    <a class="btn btn-link" href="/food/edit/{{ f.id }}">Edit</a>
-                    |
-                    <a class="btn btn-link"
-                       href="/food/delete/{{ f.id }}"
-                       onclick="return confirm('Delete this item?')">
-                        Delete
+                <td>{{ f.calories }}</td>
+                <td class="actions">
+                    <a href="/food/edit/{{ f.id }}"
+                    class="icon-btn edit"
+                    title="Edit">
+                    ✏️
+                    </a>
+
+                    <a href="/food/delete/{{ f.id }}?date={{ selected_date }}"
+                    class="icon-btn delete"
+                    title="Delete"
+                    onclick="return confirm('Delete this item?')">
+                    🗑️
                     </a>
                 </td>
             </tr>
             {% endfor %}
         </table>
         {% else %}
-            <p>No food logged yet today.</p>
+        <p>No food logged for this date 🍽️</p>
         {% endif %}
-    </div>
-
-    <!-- ================= SUMMARY ================= -->
-    <div class="card">
-        <h2>Today’s Nutrition Summary</h2>
-
-        <div class="stats">
-            <div class="stat-box">
-                <p>Calories</p>
-                <h3>{{ totals.cal or 0 }}</h3>
-            </div>
-            <div class="stat-box">
-                <p>Protein (g)</p>
-                <h3>{{ totals.protein or 0 }}</h3>
-            </div>
-            <div class="stat-box">
-                <p>Fat (g)</p>
-                <h3>{{ totals.fat or 0 }}</h3>
-            </div>
-            <div class="stat-box">
-                <p>Sugar (g)</p>
-                <h3>{{ totals.sugar or 0 }}</h3>
-            </div>
-        </div>
     </div>
 
 </div>
 
-<!-- ================= JAVASCRIPT ================= -->
 <script>
-const FOOD_DATA = {{ food_data | tojson | safe }};
+    const toggle = document.getElementById("themeToggle");
 
-const mealSelect = document.getElementById("meal");
-const foodSelect = document.getElementById("food");
-const othersBlock = document.getElementById("others_block");
-const qtyBlock = document.getElementById("qty_block");
-
-mealSelect.addEventListener("change", () => {
-    const meal = mealSelect.value;
-    foodSelect.innerHTML = '<option value="">-- Select Food --</option>';
-    foodSelect.disabled = true;
-    othersBlock.style.display = "none";
-    qtyBlock.style.display = "block";
-
-    if (!meal || !FOOD_DATA[meal]) return;
-
-    Object.keys(FOOD_DATA[meal]).forEach(item => {
-        const opt = document.createElement("option");
-        opt.value = item;
-        opt.textContent = item;
-        foodSelect.appendChild(opt);
-    });
-
-    const otherOpt = document.createElement("option");
-    otherOpt.value = "OTHERS";
-    otherOpt.textContent = "OTHERS (Manual Entry)";
-    foodSelect.appendChild(otherOpt);
-
-    foodSelect.disabled = false;
-});
-
-foodSelect.addEventListener("change", () => {
-    if (foodSelect.value === "OTHERS") {
-        othersBlock.style.display = "block";
-        qtyBlock.style.display = "none";
-    } else {
-        othersBlock.style.display = "none";
-        qtyBlock.style.display = "block";
+    // Load saved theme
+    if (localStorage.getItem("theme") === "dark") {
+        document.body.classList.add("dark");
+        toggle.textContent = "☀️ Light";
     }
-});
+
+    toggle.addEventListener("click", () => {
+        document.body.classList.toggle("dark");
+
+        if (document.body.classList.contains("dark")) {
+            localStorage.setItem("theme", "dark");
+            toggle.textContent = "☀️ Light";
+        } else {
+            localStorage.setItem("theme", "light");
+            toggle.textContent = "🌙 Dark";
+        }
+    });
 </script>
 
 </body>

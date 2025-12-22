@@ -1,4 +1,17 @@
-/* ===== Global Reset ===== */
+/* =========================
+   GLOBAL THEME TRANSITION
+========================= */
+
+* {
+    transition:
+        background-color 0.35s ease,
+        color 0.35s ease,
+        border-color 0.35s ease,
+        box-shadow 0.35s ease;
+}
+
+
+/* ===== RESET ===== */
 * {
     box-sizing: border-box;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -6,32 +19,20 @@
 
 body {
     margin: 0;
-    padding: 0;
-    background: #f4f6f8;
-    color: #333;
+    background: linear-gradient(135deg, #f8fafc, #eef2ff);
+    color: #1f2933;
 }
 
-/* ===== Layout ===== */
-.container {
-    max-width: 1100px;
-    margin: auto;
-    padding: 30px;
-}
-
-h1, h2, h3 {
-    margin-top: 0;
-}
-
-/* ===== Navbar ===== */
+/* ===== NAVBAR ===== */
 .navbar {
-    background: #111827;
-    padding: 16px 30px;
-    color: white;
+    background: #0f172a;
+    padding: 16px 28px;
+    display: flex;
+    gap: 20px;
 }
 
 .navbar a {
     color: #e5e7eb;
-    margin-right: 20px;
     text-decoration: none;
     font-weight: 500;
 }
@@ -40,64 +41,139 @@ h1, h2, h3 {
     color: #38bdf8;
 }
 
-/* ===== Cards ===== */
+/* ===== LAYOUT ===== */
+.container {
+    max-width: 1100px;
+    margin: auto;
+    padding: 30px 20px;
+}
+
+h1 {
+    margin-bottom: 10px;
+}
+
+h2 {
+    margin-bottom: 15px;
+}
+
+/* ===== CARDS ===== */
 .card {
     background: white;
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 14px;
+    padding: 22px;
     margin-bottom: 25px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
 }
 
-/* ===== Buttons ===== */
-button, .btn {
-    background: #2563eb;
-    color: white;
-    border: none;
-    padding: 10px 16px;
+/* ===== Action Buttons ===== */
+
+.actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
+    text-decoration: none;
+    font-size: 16px;
+    transition: all 0.2s ease;
 }
 
-button:hover, .btn:hover {
-    background: #1d4ed8;
+.icon-btn.edit {
+    background: #eef3ff;
+    color: #1d4ed8;
 }
 
-.btn-danger {
-    background: #dc2626;
+.icon-btn.delete {
+    background: #fee2e2;
+    color: #dc2626;
 }
 
-.btn-danger:hover {
-    background: #b91c1c;
+.icon-btn:hover {
+    transform: scale(1.1);
 }
 
-.btn-link {
-    background: transparent;
-    color: #2563eb;
-    padding: 0;
+.icon-btn.edit:hover {
+    background: #dbeafe;
 }
 
-/* ===== Forms ===== */
+.icon-btn.delete:hover {
+    background: #fecaca;
+}
+
+
+/* ===== FORMS ===== */
+input, select {
+    width: 100%;
+    padding: 10px;
+    margin-top: 6px;
+    margin-bottom: 14px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+}
+
 label {
     font-weight: 600;
     font-size: 14px;
 }
 
-input, select {
-    width: 100%;
-    padding: 8px 10px;
-    margin-top: 6px;
-    margin-bottom: 16px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
+/* ===== STATS ===== */
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
 }
 
-/* ===== Tables ===== */
+.stat-box {
+    background: linear-gradient(135deg, #f1f5f9, #e0e7ff);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+}
+
+.stat-box h3 {
+    margin: 6px 0 0;
+    font-size: 22px;
+}
+
+/* ===== PROGRESS BARS ===== */
+.progress-group {
+    margin-bottom: 18px;
+}
+
+.progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.progress-bar {
+    background: #e5e7eb;
+    height: 14px;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.progress-fill.over {
+    background: linear-gradient(90deg, #f97316, #dc2626);
+}
+
+/* ===== TABLE ===== */
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 15px;
 }
 
 th {
@@ -106,66 +182,503 @@ th {
 }
 
 th, td {
-    padding: 10px;
+    padding: 12px;
     text-align: center;
     border-bottom: 1px solid #e5e7eb;
 }
 
-/* ===== Summary Pills ===== */
-.stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 16px;
+/* ===== DATE NAV ===== */
+.date-nav {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 20px;
 }
 
-.stat-box {
-    background: #f8fafc;
-    padding: 15px;
-    border-radius: 10px;
-    text-align: center;
+.date-nav input {
+    max-width: 160px;
 }
 
-.stat-box h3 {
-    margin: 5px 0;
-    font-size: 20px;
-}
-
-/* ===== Responsive ===== */
+/* ===== MOBILE ===== */
 @media (max-width: 600px) {
-    .container {
-        padding: 15px;
+    .navbar {
+        flex-direction: column;
     }
 }
 
-/* ===== Progress Bars ===== */
+/* ===== Today Button ===== */
 
-.progress-group {
-    margin-top: 15px;
+.today-btn {
+    display: inline-block;
+    padding: 6px 14px;
+    margin-left: 10px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4338ca;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
 }
 
-.progress-label {
-    display: flex;
-    justify-content: space-between;
+.today-btn:hover {
+    background: #e0e7ff;
+    transform: translateY(-1px);
+}
+
+/* ===== Primary Button ===== */
+
+.primary-btn {
+    margin-top: 15px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.primary-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25);
+}
+
+/* ===== Today Pill Button (Global) ===== */
+
+.today-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    margin-left: 10px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+    color: #4338ca;
     font-size: 14px;
     font-weight: 600;
-    margin-bottom: 6px;
+    text-decoration: none;
+    border: 1px solid #c7d2fe;
+    transition: all 0.25s ease;
 }
 
-.progress-bar {
-    background: #e5e7eb;
-    border-radius: 8px;
-    overflow: hidden;
-    height: 14px;
+.today-pill::before {
+    content: "📅";
+    font-size: 14px;
 }
 
-.progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #22c55e, #16a34a);
-    width: 0%;
-    transition: width 0.4s ease;
+.today-pill:hover {
+    background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.25);
 }
 
-/* Warning when exceeding */
-.progress-fill.over {
-    background: linear-gradient(90deg, #f97316, #dc2626);
+/* ===== Date + Today Alignment ===== */
+
+.date-control input[type="date"] {
+    height: 40px;
+    width: 160px;           /* ✅ FIX: prevents stretching */
+    padding: 0 12px;
+    font-size: 14px;
+    border-radius: 10px;
+    border: 1px solid #c7d2fe;
+    background-color: #ffffff;
+}
+
+
+/* Normalize date input height */
+.date-control input[type="date"] {
+    height: 40px;
+    padding: 0 12px;
+    font-size: 14px;
+    border-radius: 10px;
+    border: 1px solid #c7d2fe;
+    background-color: #ffffff;
+}
+
+/* Match Today pill height */
+.today-pill {
+    height: 40px;
+    padding: 0 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+    color: #4338ca;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid #c7d2fe;
+    transition: all 0.25s ease;
+}
+
+.today-pill::before {
+    content: "📅";
+    margin-right: 6px;
+}
+
+.today-pill:hover {
+    background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.25);
+}
+
+/* ===== Save Changes Button ===== */
+
+.save-btn {
+    margin-top: 20px;
+    padding: 12px 24px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.save-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+}
+
+.save-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 6px 14px rgba(37, 99, 235, 0.25);
+}
+
+
+/* Date navigation container */
+.date-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+}
+
+/* Prevent form from stretching */
+.date-control form {
+    margin: 0;
+}
+
+/* Date input styling */
+.date-control input[type="date"] {
+    height: 42px;
+    width: 160px;           /* prevents over-expansion */
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 1.5px solid #c7d2fe;
+    font-size: 15px;
+    background: white;
+}
+
+/* Today button styling */
+.today-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 42px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1.5px solid #c7d2fe;
+    transition: all 0.2s ease;
+}
+
+.today-pill:hover {
+    background: #e0e7ff;
+    transform: translateY(-1px);
+}
+
+
+/* ===============================
+   DARK MODE VARIABLES
+================================ */
+:root {
+    --bg-main: #f5f7fb;
+    --bg-card: #ffffff;
+    --text-main: #111827;
+    --text-muted: #6b7280;
+    --border-color: #e5e7eb;
+}
+
+/* Dark mode overrides */
+body.dark {
+    --bg-main: #0f172a;
+    --bg-card: #1e293b;
+    --text-main: #e5e7eb;
+    --text-muted: #9ca3af;
+    --border-color: #334155;
+}
+
+/* ===============================
+   GLOBAL APPLICATION
+================================ */
+body {
+    background: var(--bg-main);
+    color: var(--text-main);
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+.card,
+.container,
+.stats-card,
+.form-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    transition: background 0.3s ease, border 0.3s ease;
+}
+
+/* Text */
+h1, h2, h3, h4, h5 {
+    color: var(--text-main);
+}
+
+p, label, span {
+    color: var(--text-muted);
+}
+
+/* Tables */
+table {
+    background: var(--bg-card);
+}
+
+th {
+    background: rgba(99,102,241,0.08);
+    color: var(--text-main);
+}
+
+td {
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Inputs */
+input, select {
+    background: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+}
+
+/* ===============================
+   NAVBAR DARK MODE
+================================ */
+.navbar {
+    background: linear-gradient(90deg, #020617, #020617);
+}
+
+/* ===============================
+   THEME TOGGLE BUTTON
+================================ */
+.theme-toggle {
+    margin-left: auto;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid #6366f1;
+    background: transparent;
+    color: #6366f1;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.theme-toggle:hover {
+    background: #6366f1;
+    color: white;
+}
+
+/* =========================
+   DARK MODE FIXES
+========================= */
+
+body.dark {
+    background: linear-gradient(135deg, #0b1220, #111827);
+    color: #e5e7eb;
+}
+
+/* Dashboard container */
+body.dark .dashboard,
+body.dark .container,
+body.dark .card {
+    background: #1f2937;
+    border-color: #334155;
+}
+
+/* Stat cards */
+body.dark .stat-box {
+    background: #111827;
+    color: #e5e7eb;
+}
+
+/* Stat titles */
+body.dark .stat-box p {
+    color: #9ca3af;
+}
+
+/* Stat values (IMPORTANT) */
+body.dark .stat-box h3 {
+    color: #f9fafb;
+    font-weight: 700;
+}
+
+/* Section titles */
+body.dark h1,
+body.dark h2,
+body.dark h3 {
+    color: #f9fafb;
+}
+
+/* Date input */
+body.dark input[type="date"] {
+    background: #0f172a;
+    color: #f9fafb;
+    border: 1px solid #334155;
+}
+
+/* Calendar icon fix */
+body.dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+}
+
+/* Today button */
+body.dark .today-pill {
+    background: rgba(99, 102, 241, 0.15);
+    color: #c7d2fe;
+    border: 1px solid #6366f1;
+}
+
+/* Navbar */
+body.dark .navbar {
+    background: linear-gradient(90deg, #020617, #020617);
+}
+
+/* Tables */
+body.dark table {
+    background: #020617;
+    color: #e5e7eb;
+}
+
+body.dark th {
+    background: #020617;
+    color: #c7d2fe;
+}
+
+body.dark td {
+    border-color: #1e293b;
+}
+
+.card,
+.container,
+.stat-box,
+.navbar,
+table,
+input,
+button {
+    transition:
+        background-color 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+        color 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+        border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body {
+    transition: background 0.5s ease;
+}
+
+body.dark .card {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.card {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.theme-toggle {
+    transition:
+        background-color 0.1s ease,
+        color 0.1s ease,
+        transform 0.1s ease;
+}
+
+.theme-toggle:hover {
+    transform: scale(1.05);
+}
+
+
+/* ===== Page Wrapper ===== */
+.page-wrapper {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* ===== Cards ===== */
+.card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* ===== Sleep Notes Textarea ===== */
+textarea {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid rgba(255,255,255,0.12);
+  transition: border 0.25s ease, box-shadow 0.25s ease;
+}
+
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(100,140,255,0.25);
+}
+
+/* ===== Sleep Log Table ===== */
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.log-table th,
+.log-table td {
+  padding: 12px;
+  text-align: left;
+}
+
+.log-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.log-table td {
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
 }
