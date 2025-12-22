@@ -92,6 +92,32 @@ def init_db():
     db.commit()
     db.close()
 
+
+def get_weekly_data(selected_date):
+    db = get_db()
+
+    weekly = db.execute("""
+        WITH dates AS (
+            SELECT date(?) AS d
+            UNION ALL SELECT date(d, '-1 day') FROM dates LIMIT 7
+        )
+        SELECT
+            dates.d AS date,
+            COALESCE(SUM(food_log.calories), 0) AS calories,
+            COALESCE(sleep_log.hours, 0) AS sleep,
+            COALESCE(SUM(wellbeing_log.minutes), 0) AS wellbeing
+        FROM dates
+        LEFT JOIN food_log ON food_log.date = dates.d
+        LEFT JOIN sleep_log ON sleep_log.date = dates.d
+        LEFT JOIN wellbeing_log ON wellbeing_log.date = dates.d
+        GROUP BY dates.d
+        ORDER BY dates.d
+    """, (selected_date,)).fetchall()
+
+    db.close()
+    return weekly
+
+
 # ================= DASHBOARD =================
 @app.route("/")
 def index():
@@ -123,6 +149,8 @@ def index():
         WHERE date=?
     """, (selected_date,)).fetchone()
 
+    weekly = get_weekly_data(selected_date)
+
     db.close()
 
     return render_template(
@@ -130,9 +158,11 @@ def index():
         t=food_totals,
         sleep=sleep,
         wellbeing=wellbeing,
+        weekly=weekly,
         goals=DAILY_GOALS,
         selected_date=selected_date
     )
+
 
 # ================= FOOD =================
 @app.route("/food", methods=["GET", "POST"])
@@ -253,6 +283,8 @@ def report():
 
     total_wellbeing = sum(w["minutes"] for w in wellbeing_logs)
 
+    weekly = get_weekly_data(selected_date)
+
     db.close()
 
     return render_template(
@@ -261,8 +293,10 @@ def report():
         sleep=sleep,
         wellbeing_logs=wellbeing_logs,
         total_wellbeing=total_wellbeing,
+        weekly=weekly,
         selected_date=selected_date
-    )
+)
+
 
 
 # ================= SLEEP =================
