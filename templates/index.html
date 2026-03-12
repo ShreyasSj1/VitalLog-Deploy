@@ -1,207 +1,209 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Dashboard</title>
+  <meta charset="UTF-8">
+  <title>Dashboard</title>
 
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body>
+
+<body class="{{ 'dark' if dark_mode else '' }}">
 
 <!-- NAVBAR -->
-<div class="navbar">
-    <div class="nav-left">
-        <a href="/">Dashboard</a>
-        <a href="/food">Food</a>
-        <a href="/sleep">Sleep</a>
-        <a href="/wellbeing">Well-being</a>
-        <a href="/report">Report</a>
-    </div>
+<nav class="navbar">
+  <div class="nav-left">
+    <a href="/">Dashboard</a>
+    <a href="/food">Food</a>
+    <a href="/sleep">Sleep</a>
+    <a href="/wellbeing">Well-being</a>
+    <a href="/report">Report</a>
+  </div>
 
-    <button id="themeToggle" class="theme-btn">🌙 Dark</button>
-</div>
+  <button id="themeToggle" class="theme-btn">🌙 Dark</button>
+</nav>
 
-
+<!-- PAGE CONTAINER -->
 <div class="page-container">
 
-    <!-- DATE CONTROL -->
-    <div class="date-control">
-    <form method="get" class="date-form">
-        <input
-            type="date"
-            name="date"
-            value="{{ selected_date }}"
-            onchange="this.form.submit()"
-            class="date-input"
-        >
-    </form>
+  <!-- DATE PICKER -->
+  <form method="get" class="date-control">
+    <input
+        type="date"
+        name="date"
+        value="{{ selected_date }}"
+        onchange="this.form.submit()"
+        class="date-input"
+    >
+    <a href="{{ request.path }}" class="today-btn">📅 Today</a>
+</form>
 
-    <a href="{{ request.path }}" class="today-btn">
-        📅 Today
-    </a>
+
+  <!-- DAILY OVERVIEW -->
+  <div class="card">
+    <h2>Daily Overview</h2>
+
+    <div class="overview-grid">
+
+      <div class="progress-card">
+        <canvas id="calorieChart"></canvas>
+        <div class="progress-label">
+          <strong>Calories</strong><br>
+          {{ total_calories }} / {{ goals.calories }} kcal
+        </div>
+      </div>
+
+      <div class="progress-card">
+        <canvas id="proteinChart"></canvas>
+        <div class="progress-label">
+          <strong>Protein</strong><br>
+          {{ total_protein }} / {{ goals.protein }} g
+        </div>
+      </div>
+
+      <div class="progress-card">
+        <canvas id="fatChart"></canvas>
+        <div class="progress-label">
+          <strong>Fat</strong><br>
+          {{ total_fat }} / {{ goals.fat }} g
+        </div>
+      </div>
+
+      <div class="progress-card">
+        <canvas id="sugarChart"></canvas>
+        <div class="progress-label">
+          <strong>Sugar</strong><br>
+          {{ total_sugar }} / {{ goals.sugar }} g
+        </div>
+      </div>
+
     </div>
+  </div>
 
-
-
-    <!-- DAILY OVERVIEW -->
+  <!-- WEEKLY TRENDS -->
     <div class="card">
-        <h2>Daily Overview</h2>
+    <h2>Weekly Trends</h2>
 
-        <div class="stats-grid">
-            <div class="stat-box">
-                <p>Calories</p>
-                <h3>{{ t.cal or 0 }}</h3>
-            </div>
-
-            <div class="stat-box">
-                <p>Protein (g)</p>
-                <h3>{{ t.protein or 0 }}</h3>
-            </div>
-
-            <div class="stat-box">
-                <p>Fat (g)</p>
-                <h3>{{ t.fat or 0 }}</h3>
-            </div>
-
-            <div class="stat-box">
-                <p>Sugar (g)</p>
-                <h3>{{ t.sugar or 0 }}</h3>
-            </div>
+    <div class="chart-section">
+        <h3>Calories</h3>
+        <div class="chart-block">
+        <canvas id="weeklyCalories"></canvas>
         </div>
     </div>
 
-    <!-- WEEKLY CHARTS -->
-    <div class="card">
-        <h2>Weekly Trends</h2>
-
-        <div class="chart-grid">
-            <div>
-                <h4>Calories</h4>
-                <canvas id="calorieChart"></canvas>
-            </div>
-
-            <div>
-                <h4>Sleep (hrs)</h4>
-                <canvas id="sleepChart"></canvas>
-            </div>
-
-            <div>
-                <h4>Well-being (min)</h4>
-                <canvas id="wellbeingChart"></canvas>
-            </div>
+    <div class="chart-section">
+        <h3>Sleep Hours</h3>
+        <div class="chart-block">
+        <canvas id="weeklySleep"></canvas>
         </div>
     </div>
 
-</div>
+    <div class="chart-section">
+        <h3>Well-being Minutes</h3>
+        <div class="chart-block">
+        <canvas id="weeklyWellbeing"></canvas>
+        </div>
+    </div>
 
-<!-- ================= CHART SCRIPTS ================= -->
+    </div>
+
+<!-- JS -->
 <script>
-const labels = {{ week | tojson }};
+/* -------------------- DARK MODE -------------------- */
+const toggle = document.getElementById('themeToggle');
+toggle.onclick = () => {
+  document.body.classList.toggle('dark');
+  localStorage.setItem(
+    'theme',
+    document.body.classList.contains('dark') ? 'dark' : 'light'
+  );
+};
 
-// Calories Chart
-new Chart(document.getElementById("calorieChart"), {
-    type: "bar",
-    data: {
-        labels: labels,
-        datasets: [{
-            label: "Calories",
-            data: {{ weekly_cal | tojson }},
-            backgroundColor: "#4f6cff"
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-    }
-});
-
-// Sleep Chart
-new Chart(document.getElementById("sleepChart"), {
-    type: "line",
-    data: {
-        labels: labels,
-        datasets: [{
-            label: "Sleep (hrs)",
-            data: {{ weekly_sleep | tojson }},
-            borderColor: "#22c55e",
-            tension: 0.4,
-            spanGaps: true
-        }]
-    },
-    options: {
-        responsive: true,
-        scales: { y: { beginAtZero: true, max: 10 } }
-    }
-});
-
-// Well-being Chart
-new Chart(document.getElementById("wellbeingChart"), {
-    type: "line",
-    data: {
-        labels: labels,
-        datasets: [{
-            label: "Well-being (min)",
-            data: {{ weekly_wellbeing | tojson }},
-            borderColor: "#facc15",
-            tension: 0.4,
-            spanGaps: true
-        }]
-    },
-    options: {
-        responsive: true,
-        scales: { y: { beginAtZero: true } }
-    }
-});
-</script>
-
-<script>
-const toggleBtn = document.getElementById("themeToggle");
-
-// Load saved theme
-if (localStorage.getItem("theme") === "dark") {
-    document.body.classList.add("dark");
-    toggleBtn.innerText = "☀️ Light";
+if (localStorage.getItem('theme') === 'dark') {
+  document.body.classList.add('dark');
 }
 
-toggleBtn.addEventListener("click", () => {
-    document.body.classList.toggle("dark");
+/* -------------------- DAILY PROGRESS RINGS -------------------- */
+function createProgressChart(id, value, goal, color) {
+  const pct = Math.min((value / goal) * 100, 100);
 
-    if (document.body.classList.contains("dark")) {
-        localStorage.setItem("theme", "dark");
-        toggleBtn.innerText = "☀️ Light";
-    } else {
-        localStorage.setItem("theme", "light");
-        toggleBtn.innerText = "🌙 Dark";
+  new Chart(document.getElementById(id), {
+    type: 'doughnut',
+    data: {
+      datasets: [{
+        data: [pct, 100 - pct],
+        backgroundColor: [color, '#1f2937'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '80%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false }
+      }
     }
+  });
+}
+
+createProgressChart('calorieChart', {{ total_calories }}, {{ goals.calories }}, '#6366f1');
+createProgressChart('proteinChart', {{ total_protein }}, {{ goals.protein }}, '#22c55e');
+createProgressChart('fatChart', {{ total_fat }}, {{ goals.fat }}, '#facc15');
+createProgressChart('sugarChart', {{ total_sugar }}, {{ goals.sugar }}, '#ef4444');
+
+/* -------------------- WEEKLY CHARTS -------------------- */
+new Chart(document.getElementById('weeklyCalories'), {
+  type: 'bar',
+  data: {
+    labels: {{ week | safe }},
+    datasets: [{
+      label: 'Calories',
+      data: {{ weekly_cal | safe }},
+      backgroundColor: '#6366f1'
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false
+  }
 });
-</script>
 
-<script>
-const toggleBtn = document.getElementById("themeToggle");
 
-if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
-        document.body.classList.add("theme-switching");
+new Chart(document.getElementById('weeklySleep'), {
+  type: 'line',
+  data: {
+    labels: {{ week | safe }},
+    datasets: [{
+      label: 'Sleep (hrs)',
+      data: {{ weekly_sleep | safe }},
+      borderColor: '#22c55e',
+      tension: 0.4
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false
+  }
+});
 
-        setTimeout(() => {
-            document.body.classList.toggle("dark");
-            localStorage.setItem(
-                "theme",
-                document.body.classList.contains("dark") ? "dark" : "light"
-            );
-            document.body.classList.remove("theme-switching");
-        }, 150);
-    });
-}
-</script>
-
-<script>
-const savedTheme = localStorage.getItem("theme");
-if (savedTheme === "dark") {
-    document.body.classList.add("dark");
-}
+new Chart(document.getElementById('weeklyWellbeing'), {
+  type: 'line',
+  data: {
+    labels: {{ week | safe }},
+    datasets: [{
+      label: 'Well-being (min)',
+      data: {{ weekly_wellbeing | safe }},
+      borderColor: '#facc15',
+      tension: 0.4
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false
+  }
+});
 </script>
 
 </body>

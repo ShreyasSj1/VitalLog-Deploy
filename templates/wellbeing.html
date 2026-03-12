@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Well-being Tracker</title>
 
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
@@ -14,38 +14,35 @@
         <a href="/">Dashboard</a>
         <a href="/food">Food</a>
         <a href="/sleep">Sleep</a>
-        <a href="/wellbeing">Well-being</a>
+        <a href="/wellbeing" class="active">Well-being</a>
         <a href="/report">Report</a>
     </div>
 
     <button id="themeToggle" class="theme-btn">🌙 Dark</button>
 </div>
 
-
 <div class="page-container">
 
     <!-- DATE CONTROL -->
     <div class="date-control">
-    <form method="get" class="date-form">
-        <input
-            type="date"
-            name="date"
-            value="{{ selected_date }}"
-            onchange="this.form.submit()"
-            class="date-input"
-        >
-    </form>
+        <form method="get">
+            <input
+                type="date"
+                name="date"
+                value="{{ selected_date }}"
+                onchange="this.form.submit()"
+                class="date-input"
+            >
+        </form>
 
-    <a href="/wellbeing" class="today-btn">📅 Today</a>
-</div>
-
-
+        <a href="/wellbeing" class="today-btn">📅 Today</a>
+    </div>
 
     <!-- ADD ACTIVITY -->
     <div class="card">
         <h2>Add Well-being Activity</h2>
 
-        <form method="post" id="wellbeingForm">
+        <form method="post">
             <input type="hidden" name="date" value="{{ selected_date }}">
 
             <div class="form-row">
@@ -107,13 +104,12 @@
                     <td>{{ w.minutes }}</td>
                     <td class="action-cell">
                         <a href="/wellbeing/delete/{{ w.id }}?date={{ selected_date }}"
-                        class="action-btn delete-btn"
-                        title="Delete"
-                        onclick="return confirm('Delete this activity?')">
+                           class="action-btn delete-btn"
+                           title="Delete"
+                           onclick="return confirm('Delete this activity?')">
                             🗑
                         </a>
                     </td>
-
                 </tr>
                 {% endfor %}
             </tbody>
@@ -130,12 +126,11 @@
 function toggleOtherActivity() {
     const activity = document.getElementById("activitySelect").value;
     const box = document.getElementById("otherActivityBox");
-
     box.style.display = activity === "OTHERS" ? "block" : "none";
 }
 </script>
 
-
+<!-- THEME SCRIPT -->
 <script>
 const toggleBtn = document.getElementById("themeToggle");
 
@@ -146,15 +141,15 @@ if (localStorage.getItem("theme") === "dark") {
 }
 
 toggleBtn.addEventListener("click", () => {
-    document.body.classList.toggle("dark");
+    document.body.classList.add("theme-switching");
 
-    if (document.body.classList.contains("dark")) {
-        localStorage.setItem("theme", "dark");
-        toggleBtn.innerText = "☀️ Light";
-    } else {
-        localStorage.setItem("theme", "light");
-        toggleBtn.innerText = "🌙 Dark";
-    }
+    setTimeout(() => {
+        document.body.classList.toggle("dark");
+        const isDark = document.body.classList.contains("dark");
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+        toggleBtn.innerText = isDark ? "☀️ Light" : "🌙 Dark";
+        document.body.classList.remove("theme-switching");
+    }, 150);
 });
 </script>
 

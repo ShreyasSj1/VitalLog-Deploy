@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Food Log</title>
-
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
@@ -17,7 +16,6 @@
         <a href="/wellbeing">Well-being</a>
         <a href="/report">Report</a>
     </div>
-
     <button id="themeToggle" class="theme-btn">🌙 Dark</button>
 </div>
 
@@ -25,7 +23,7 @@
 
     <!-- DATE CONTROL -->
     <div class="date-control">
-        <form method="get" class="date-form">
+        <form method="get">
             <input
                 type="date"
                 name="date"
@@ -35,7 +33,6 @@
             >
         </form>
 
-        <!-- Today button MUST reset date -->
         <a href="/food" class="today-btn">📅 Today</a>
     </div>
 
@@ -45,7 +42,7 @@
 
         <form method="post" class="food-form">
 
-            <!-- 🔥 CRITICAL: DATE MUST BE SENT -->
+            <!-- REQUIRED -->
             <input type="hidden" name="date" value="{{ selected_date }}">
 
             <div class="form-row">
@@ -63,6 +60,15 @@
                 <select name="food" id="foodSelect" required>
                     <option value="">Select Food</option>
                 </select>
+            </div>
+
+            <!-- OTHERS -->
+            <div id="otherFoodFields" class="other-food-fields" style="display:none;">
+                <input type="text" name="other_name" placeholder="Food name">
+                <input type="number" name="other_calories" placeholder="Calories" step="0.1">
+                <input type="number" name="other_protein" placeholder="Protein (g)" step="0.1">
+                <input type="number" name="other_fat" placeholder="Fat (g)" step="0.1">
+                <input type="number" name="other_sugar" placeholder="Sugar (g)" step="0.1">
             </div>
 
             <div class="form-row">
@@ -108,22 +114,20 @@
                 <td>{{ f.fat }}</td>
                 <td>{{ f.sugar }}</td>
                 <td class="action-cell">
-                    <a href="/food/edit/{{ f.id }}" class="action-btn edit-btn" title="Edit">
-                        ✏️
-                    </a>
-                    <a href="/food/delete/{{ f.id }}?date={{ selected_date }}"
-                    class="action-btn delete-btn"
-                    title="Delete"
-                    onclick="return confirm('Delete this item?')">
-                        🗑
-                    </a>
-                </td>
+                    <a href="/food/edit/{{ f.id }}"
+                       class="action-btn edit-btn"
+                       title="Edit">✏️</a>
 
+                    <a href="/food/delete/{{ f.id }}?date={{ selected_date }}"
+                       class="action-btn delete-btn"
+                       title="Delete"
+                       onclick="return confirm('Delete this item?')">🗑</a>
+                </td>
             </tr>
             {% endfor %}
         </table>
         {% else %}
-            <p class="empty-text">No food logged for this date 🍽️</p>
+            <p class="empty-state">No food logged for this date 🍽️</p>
         {% endif %}
     </div>
 
@@ -132,13 +136,15 @@
 <!-- ================= JS ================= -->
 
 <script>
-/* ---------- Meal → Food dynamic dropdown ---------- */
+/* --------- FOOD DROPDOWN + OTHERS ---------- */
 const FOOD_DATA = {{ food_data | tojson }};
 const mealSelect = document.getElementById("mealSelect");
 const foodSelect = document.getElementById("foodSelect");
+const otherFields = document.getElementById("otherFoodFields");
 
 mealSelect.addEventListener("change", () => {
     foodSelect.innerHTML = '<option value="">Select Food</option>';
+    otherFields.style.display = "none";
 
     const meal = mealSelect.value;
     if (!meal) return;
@@ -149,14 +155,23 @@ mealSelect.addEventListener("change", () => {
         opt.textContent = food;
         foodSelect.appendChild(opt);
     });
+
+    const others = document.createElement("option");
+    others.value = "OTHERS";
+    others.textContent = "➕ Others";
+    foodSelect.appendChild(others);
+});
+
+foodSelect.addEventListener("change", () => {
+    otherFields.style.display =
+        foodSelect.value === "OTHERS" ? "grid" : "none";
 });
 </script>
 
 <script>
-/* ---------- DARK MODE WITH SMOOTH TRANSITION ---------- */
+/* --------- DARK MODE ---------- */
 const toggleBtn = document.getElementById("themeToggle");
 
-// Load saved theme
 if (localStorage.getItem("theme") === "dark") {
     document.body.classList.add("dark");
     toggleBtn.innerText = "☀️ Light";
@@ -167,15 +182,9 @@ toggleBtn.addEventListener("click", () => {
 
     setTimeout(() => {
         document.body.classList.toggle("dark");
-
-        if (document.body.classList.contains("dark")) {
-            localStorage.setItem("theme", "dark");
-            toggleBtn.innerText = "☀️ Light";
-        } else {
-            localStorage.setItem("theme", "light");
-            toggleBtn.innerText = "🌙 Dark";
-        }
-
+        const isDark = document.body.classList.contains("dark");
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+        toggleBtn.innerText = isDark ? "☀️ Light" : "🌙 Dark";
         document.body.classList.remove("theme-switching");
     }, 150);
 });
