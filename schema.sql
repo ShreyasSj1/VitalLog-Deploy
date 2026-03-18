@@ -24,3 +24,16 @@ CREATE TABLE IF NOT EXISTS wellbeing_log (
     activity TEXT,
     minutes INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS gym_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT,
+    muscle TEXT,
+    exercise TEXT,
+    sets INTEGER,
+    reps INTEGER,
+    weight REAL,
+    intensity TEXT,
+    duration REAL,
+    calories REAL
+);

@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard</title>
-
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -11,17 +15,19 @@
 <body class="{{ 'dark' if dark_mode else '' }}">
 
 <!-- NAVBAR -->
-<nav class="navbar">
-  <div class="nav-left">
-    <a href="/">Dashboard</a>
-    <a href="/food">Food</a>
-    <a href="/sleep">Sleep</a>
-    <a href="/wellbeing">Well-being</a>
-    <a href="/report">Report</a>
-  </div>
+  <div class="navbar">
+    <div class="nav-left" id="navMenu">
+      <a href="/" class="active">Dashboard</a>
+      <a href="/food">Food</a>
+      <a href="/sleep">Sleep</a>
+      <a href="/wellbeing">Well-being</a>
+      <a href="/gym">Gym</a>
+      <a href="/report">Report</a>
+    </div>
 
-  <button id="themeToggle" class="theme-btn">🌙 Dark</button>
-</nav>
+    <button id="themeToggle" class="theme-btn">🌙 Dark</button>
+    <button class="menu-toggle" id="menuToggle">☰</button>
+  </div>
 
 <!-- PAGE CONTAINER -->
 <div class="page-container">
@@ -35,174 +41,283 @@
         onchange="this.form.submit()"
         class="date-input"
     >
-    <a href="{{ request.path }}" class="today-btn">📅 Today</a>
+    <a href="{{ request.path }}" class="today-btn">Today</a>
 </form>
 
 
-  <!-- DAILY OVERVIEW -->
-  <div class="card">
-    <h2>Daily Overview</h2>
-
-    <div class="overview-grid">
-
-      <div class="progress-card">
-        <canvas id="calorieChart"></canvas>
-        <div class="progress-label">
-          <strong>Calories</strong><br>
-          {{ total_calories }} / {{ goals.calories }} kcal
+  <!-- DASHBOARD SECTIONS -->
+  <div class="dashboard-sections">
+    
+    <!-- SECTION 1: DAILY BALANCE (PRIMARY) -->
+    <div class="dashboard-section">
+      <div class="card highlight">
+        <h2>Daily Calorie Balance</h2>
+        <div class="metric-hero" id="netCalValue">{{ net_calories | round }}</div>
+        <div class="status-badge">
+            {% if net_calories < 0 %}
+                🔥 Calorie Deficit
+            {% else %}
+                ⚖️ Calorie Surplus
+            {% endif %}
         </div>
+        <p class="text-muted" style="margin-top:12px; font-size:0.9rem">
+            {% if net_calories < 0 %}
+                You are burning more than you eat!
+            {% else %}
+                Energy surplus for muscle growth.
+            {% endif %}
+        </p>
       </div>
-
-      <div class="progress-card">
-        <canvas id="proteinChart"></canvas>
-        <div class="progress-label">
-          <strong>Protein</strong><br>
-          {{ total_protein }} / {{ goals.protein }} g
-        </div>
-      </div>
-
-      <div class="progress-card">
-        <canvas id="fatChart"></canvas>
-        <div class="progress-label">
-          <strong>Fat</strong><br>
-          {{ total_fat }} / {{ goals.fat }} g
-        </div>
-      </div>
-
-      <div class="progress-card">
-        <canvas id="sugarChart"></canvas>
-        <div class="progress-label">
-          <strong>Sugar</strong><br>
-          {{ total_sugar }} / {{ goals.sugar }} g
-        </div>
-      </div>
-
     </div>
+
+    <div class="metrics-grid">
+        <!-- SECTION 2: NUTRITION INTAKE -->
+        <div class="dashboard-section">
+            <h2>Nutrition Intake</h2>
+            <div class="card">
+                <!-- Calories -->
+                <div class="progress-bar-container">
+                    <div class="progress-label-row">
+                        <span><strong>Calories</strong></span>
+                        <span><span class="count-up">{{ total_calories | round }}</span> / {{ goals.calories }} kcal</span>
+                    </div>
+                    <div class="progress-track">
+                        {% set cal_pct = (total_calories * 100 / (goals.calories or 1)) | round | int %}
+                        <div class="progress-fill {{ 'red' if total_calories > goals.calories else 'green' }}" 
+                             style="width: {{ cal_pct if cal_pct < 100 else 100 }}%"></div>
+                    </div>
+                </div>
+
+                <!-- Protein -->
+                <div class="progress-bar-container">
+                    <div class="progress-label-row">
+                        <span><strong>Protein</strong></span>
+                        <span><span class="count-up">{{ total_protein | round }}</span> / {{ goals.protein }} g</span>
+                    </div>
+                    <div class="progress-track">
+                        {% set pro_pct = (total_protein * 100 / (goals.protein or 1)) | round | int %}
+                        <div class="progress-fill green" 
+                             style="width: {{ pro_pct if pro_pct < 100 else 100 }}%"></div>
+                    </div>
+                </div>
+
+                <!-- Fat -->
+                <div class="progress-bar-container">
+                    <div class="progress-label-row">
+                        <span><strong>Fat</strong></span>
+                        <span><span class="count-up">{{ total_fat | round }}</span> / {{ goals.fat }} g</span>
+                    </div>
+                    <div class="progress-track">
+                        {% set fat_pct = (total_fat * 100 / (goals.fat or 1)) | round | int %}
+                        <div class="progress-fill {{ 'red' if total_fat > goals.fat else ('yellow' if total_fat > goals.fat * 0.8 else 'green') }}" 
+                             style="width: {{ fat_pct if fat_pct < 100 else 100 }}%"></div>
+                    </div>
+                </div>
+
+                <!-- Sugar -->
+                <div class="progress-bar-container">
+                    <div class="progress-label-row">
+                        <span><strong>Sugar</strong></span>
+                        <span><span class="count-up">{{ total_sugar | round }}</span> / {{ goals.sugar }} g</span>
+                    </div>
+                    <div class="progress-track">
+                        {% set sug_pct = (total_sugar * 100 / (goals.sugar or 1)) | round | int %}
+                        <div class="progress-fill {{ 'red' if total_sugar > goals.sugar else ('yellow' if total_sugar > goals.sugar * 0.8 else 'green') }}" 
+                             style="width: {{ sug_pct if sug_pct < 100 else 100 }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 3: ACTIVITY & SCORE -->
+        <div class="dashboard-section">
+            <h2>Activity & Performance</h2>
+            
+            <!-- Gym Activity Card -->
+            <div class="card">
+                <div class="activity-summary">
+                    <div class="activity-icon">🔥</div>
+                    <div class="activity-data">
+                        <span class="text-muted">Gym Activity</span>
+                        <div class="activity-val"><span class="count-up">{{ gym_calories | round }}</span> kcal</div>
+                        <small class="text-muted">Duration: {{ gym_duration | round }} mins</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Health Score Card -->
+            <div class="card score-card">
+                <div class="score-badge-ring">
+                    <canvas id="healthScoreCircle" width="120" height="120"></canvas>
+                    <div class="score-value" style="position: absolute;">{{ health_score }}</div>
+                </div>
+                <div class="reasons-list">
+                    {% for reason, type in health_reasons %}
+                        <div class="reason-item {{ type }}">
+                            {{ '✔' if type == 'good' else '✖' }} {{ reason }}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WEEKLY TRENDS -->
+    <div class="dashboard-section">
+        <h2>Weekly Trends</h2>
+        <div class="card">
+            <div class="chart-grid">
+                <div class="chart-block">
+                    <h4>Calories</h4>
+                    <canvas id="weeklyCalories"></canvas>
+                </div>
+                <div class="chart-block">
+                    <h4>Gym Burn</h4>
+                    <canvas id="weeklyGym"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
   </div>
-
-  <!-- WEEKLY TRENDS -->
-    <div class="card">
-    <h2>Weekly Trends</h2>
-
-    <div class="chart-section">
-        <h3>Calories</h3>
-        <div class="chart-block">
-        <canvas id="weeklyCalories"></canvas>
-        </div>
-    </div>
-
-    <div class="chart-section">
-        <h3>Sleep Hours</h3>
-        <div class="chart-block">
-        <canvas id="weeklySleep"></canvas>
-        </div>
-    </div>
-
-    <div class="chart-section">
-        <h3>Well-being Minutes</h3>
-        <div class="chart-block">
-        <canvas id="weeklyWellbeing"></canvas>
-        </div>
-    </div>
-
-    </div>
+</div>
 
 <!-- JS -->
 <script>
-/* -------------------- DARK MODE -------------------- */
+/* -------------------- THEME ENGINE -------------------- */
 const toggle = document.getElementById('themeToggle');
 toggle.onclick = () => {
-  document.body.classList.toggle('dark');
-  localStorage.setItem(
-    'theme',
-    document.body.classList.contains('dark') ? 'dark' : 'light'
-  );
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    toggle.innerText = isDark ? "☀️ Light" : "🌙 Dark";
 };
 
 if (localStorage.getItem('theme') === 'dark') {
-  document.body.classList.add('dark');
+    document.body.classList.add('dark');
+    toggle.innerText = "☀️ Light";
 }
 
-/* -------------------- DAILY PROGRESS RINGS -------------------- */
-function createProgressChart(id, value, goal, color) {
-  const pct = Math.min((value / goal) * 100, 100);
+/* -------------------- ANIMATIONS -------------------- */
+// Count-up animation for numbers
+document.querySelectorAll('.count-up').forEach(el => {
+    const target = parseFloat(el.innerText);
+    if (isNaN(target)) return;
+    let count = 0;
+    const duration = 1500;
+    const increment = target / (duration / 16);
+    
+    const updateCount = () => {
+        count += increment;
+        if (count < target) {
+            el.innerText = Math.floor(count);
+            requestAnimationFrame(updateCount);
+        } else {
+            el.innerText = Math.round(target);
+        }
+    };
+    updateCount();
+});
 
-  new Chart(document.getElementById(id), {
+/* -------------------- HEALTH SCORE CIRCLE -------------------- */
+{% set h_score = health_score | default(75) %}
+const scoreCtx = document.getElementById('healthScoreCircle').getContext('2d');
+new Chart(scoreCtx, {
     type: 'doughnut',
     data: {
-      datasets: [{
-        data: [pct, 100 - pct],
-        backgroundColor: [color, '#1f2937'],
-        borderWidth: 0
-      }]
+        datasets: [{
+            data: [{{ h_score }}, {{ 100 - h_score }}],
+            backgroundColor: ['#a855f7', 'rgba(168, 85, 247, 0.1)'],
+            borderWidth: 0,
+            borderRadius: 10
+        }]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: '80%',
-      plugins: {
-        legend: { display: false },
-        tooltip: { enabled: false }
-      }
+        cutout: '85%',
+        plugins: { tooltip: { enabled: false }, legend: { display: false } }
     }
-  });
-}
-
-createProgressChart('calorieChart', {{ total_calories }}, {{ goals.calories }}, '#6366f1');
-createProgressChart('proteinChart', {{ total_protein }}, {{ goals.protein }}, '#22c55e');
-createProgressChart('fatChart', {{ total_fat }}, {{ goals.fat }}, '#facc15');
-createProgressChart('sugarChart', {{ total_sugar }}, {{ goals.sugar }}, '#ef4444');
+});
 
 /* -------------------- WEEKLY CHARTS -------------------- */
-new Chart(document.getElementById('weeklyCalories'), {
-  type: 'bar',
-  data: {
-    labels: {{ week | safe }},
-    datasets: [{
-      label: 'Calories',
-      data: {{ weekly_cal | safe }},
-      backgroundColor: '#6366f1'
-    }]
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false
-  }
+(function() {
+    Chart.defaults.font.family = "'Outfit', sans-serif";
+    Chart.defaults.color = "#94a3b8";
+
+    // Standardize labels to MM-DD
+    const rawWkLabels = {{ week | tojson }};
+    const labels = rawWkLabels.map(l => l.length > 5 ? l.substring(5) : l);
+
+    const commonWeeklyOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(148, 163, 184, 0.1)' }
+            },
+            x: {
+                ticks: {
+                    maxRotation: 0,
+                    minRotation: 0,
+                    autoSkip: true,
+                    maxTicksLimit: 7,
+                    font: { size: 10 }
+                },
+                grid: { display: false }
+            }
+        }
+    };
+
+    new Chart(document.getElementById('weeklyCalories'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Calories',
+          data: {{ weekly_cal | tojson }},
+          borderColor: '#a855f7',
+          backgroundColor: 'rgba(168, 85, 247, 0.1)',
+          borderWidth: 3,
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: commonWeeklyOptions
+    });
+
+    new Chart(document.getElementById('weeklyGym'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Gym Burns',
+          data: {{ weekly_gym | tojson }},
+          backgroundColor: '#ef4444',
+          borderRadius: 6
+        }]
+      },
+      options: commonWeeklyOptions
+    });
+})();
+</script>
+
+<script>
+const menuToggleElement = document.getElementById("menuToggle");
+const navMenuElement = document.getElementById("navMenu");
+
+menuToggleElement.addEventListener("click", () => {
+    navMenuElement.classList.toggle("active");
+    menuToggleElement.innerText = navMenuElement.classList.contains("active") ? "✕" : "☰";
 });
 
-
-new Chart(document.getElementById('weeklySleep'), {
-  type: 'line',
-  data: {
-    labels: {{ week | safe }},
-    datasets: [{
-      label: 'Sleep (hrs)',
-      data: {{ weekly_sleep | safe }},
-      borderColor: '#22c55e',
-      tension: 0.4
-    }]
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false
-  }
-});
-
-new Chart(document.getElementById('weeklyWellbeing'), {
-  type: 'line',
-  data: {
-    labels: {{ week | safe }},
-    datasets: [{
-      label: 'Well-being (min)',
-      data: {{ weekly_wellbeing | safe }},
-      borderColor: '#facc15',
-      tension: 0.4
-    }]
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false
-  }
+document.addEventListener("click", (e) => {
+    if (!navMenuElement.contains(e.target) && !menuToggleElement.contains(e.target)) {
+        navMenuElement.classList.remove("active");
+        menuToggleElement.innerText = "☰";
+    }
 });
 </script>
 

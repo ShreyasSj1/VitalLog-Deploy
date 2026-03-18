@@ -1,59 +1,328 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Log Gym Workout</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-<div class="navbar">
-    <a href="/">Dashboard</a>
-    <a href="/food">Food</a>
-    <a href="/report">Report</a>
+<body class="{{ 'dark' if dark_mode else '' }}">
+
+<!-- NAVBAR -->
+<nav class="navbar">
+    <div class="nav-left" id="navMenu">
+        <a href="/">Dashboard</a>
+        <a href="/food">Food</a>
+        <a href="/sleep">Sleep</a>
+        <a href="/wellbeing">Well-being</a>
+        <a href="/gym" class="active">Gym</a>
+        <a href="/report">Report</a>
+    </div>
+
+    <button id="themeToggle" class="theme-btn">🌙 Dark</button>
+    <button class="menu-toggle" id="menuToggle">☰</button>
+</nav>
+
+<div class="page-container">
+    <!-- DATE CONTROL -->
+    <div class="date-control">
+        <form method="get">
+            <input
+                type="date"
+                name="date"
+                value="{{ selected_date }}"
+                onchange="this.form.submit()"
+                class="date-input"
+            >
+        </form>
+        <a href="/gym" class="today-btn">Today</a>
+    </div>
+
+    {% if streak > 0 %}
+    <div class="streak-badge">🔥 {{ streak }} day gym streak</div>
+    {% endif %}
+
+    {% if last_workout %}
+    <div class="repeat-card" onclick="repeatLastWorkout()">
+        <div class="repeat-info">
+            <h4>Repeat Last Workout</h4>
+            <p>{{ last_workout.muscle }} - {{ last_workout.exercise }} ({{ last_workout.sets }} sets × {{ last_workout.reps }} reps) - {{ last_workout.weight }}kg</p>
+        </div>
+        <div class="repeat-icon">⚡</div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h2>Log Gym Workout</h2>
+
+        <form method="POST" id="gymForm">
+            <input type="hidden" name="date" value="{{ selected_date }}">
+            <!-- Step 1: Muscle Group -->
+            <div class="wizard-step active" id="step1">
+                <h3>What are we training today?</h3>
+                <div class="muscle-grid">
+                    <div class="muscle-card" onclick="selectMuscle('Chest', this)">
+                        <span class="muscle-icon">🏋️</span>
+                        Chest
+                    </div>
+                    <div class="muscle-card" onclick="selectMuscle('Back', this)">
+                        <span class="muscle-icon">🦍</span>
+                        Back
+                    </div>
+                    <div class="muscle-card" onclick="selectMuscle('Arms', this)">
+                        <span class="muscle-icon">💪</span>
+                        Arms
+                    </div>
+                    <div class="muscle-card" onclick="selectMuscle('Legs', this)">
+                        <span class="muscle-icon">🦵</span>
+                        Legs
+                    </div>
+                    <div class="muscle-card" onclick="selectMuscle('Shoulders', this)">
+                        <span class="muscle-icon">🧗‍♂️</span>
+                        Shoulders
+                    </div>
+                    <div class="muscle-card" onclick="selectMuscle('Core', this)">
+                        <span class="muscle-icon">🧘‍♂️</span>
+                        Core / Cardio
+                    </div>
+                </div>
+                <input type="hidden" name="muscle" id="muscleInput" required>
+                <div class="wizard-nav" style="justify-content: flex-end;">
+                    <button type="button" class="primary-btn btn-next" onclick="nextStep(2)">Next ➔</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Exercise Selection -->
+            <div class="wizard-step" id="step2">
+                <h3>Select Exercise</h3>
+                <div class="form-row">
+                    <select name="exercise" id="exerciseSelect" required>
+                        <option value="">Select exercise...</option>
+                    </select>
+                </div>
+                <div class="wizard-nav">
+                    <button type="button" class="btn-back" onclick="prevStep(1)">⬅ Back</button>
+                    <button type="button" class="primary-btn btn-next" onclick="nextStep(3)">Next ➔</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Sets & Reps -->
+            <div class="wizard-step" id="step3">
+                <h3>Sets & Reps</h3>
+                <div class="form-row">
+                    <label>Sets</label>
+                    <div class="preset-container" id="setsPresets">
+                        <div class="preset-btn" onclick="selectVal('sets', 3, this)">3</div>
+                        <div class="preset-btn" onclick="selectVal('sets', 4, this)">4</div>
+                        <div class="preset-btn" onclick="selectVal('sets', 5, this)">5</div>
+                    </div>
+                    <input type="number" name="sets" id="setsInput" class="form-control" placeholder="Custom sets" style="margin-top:12px; display:none;">
+                </div>
+
+                <div class="form-row" style="margin-top: 24px;">
+                    <label>Reps per set</label>
+                    <div class="preset-container" id="repsPresets">
+                        <div class="preset-btn" onclick="selectVal('reps', 8, this)">8</div>
+                        <div class="preset-btn" onclick="selectVal('reps', 10, this)">10</div>
+                        <div class="preset-btn" onclick="selectVal('reps', 12, this)">12</div>
+                        <div class="preset-btn" onclick="selectVal('reps', 15, this)">15</div>
+                    </div>
+                    <input type="number" name="reps" id="repsInput" class="form-control" placeholder="Custom reps" style="margin-top:12px; display:none;">
+                </div>
+                
+                <div class="wizard-nav">
+                    <button type="button" class="btn-back" onclick="prevStep(2)">⬅ Back</button>
+                    <button type="button" class="primary-btn btn-next" onclick="nextStep(4)">Next ➔</button>
+                </div>
+            </div>
+
+            <!-- Step 4: Weight & Details -->
+            <div class="wizard-step" id="step4">
+                <h3>Workout Details</h3>
+                
+                <div class="form-row">
+                    <label>Weight (kg)</label>
+                    <div class="increment-wrapper">
+                        <button type="button" class="increment-btn" onclick="adjWeight(-2.5)">-</button>
+                        <input type="number" step="0.5" name="weight" id="weightInput" class="increment-input" value="0">
+                        <button type="button" class="increment-btn" onclick="adjWeight(2.5)">+</button>
+                    </div>
+                </div>
+                
+                <div class="form-row" style="margin-top:24px;">
+                    <label>Intensity</label>
+                    <div class="preset-container" id="intensityPresets">
+                        <div class="preset-btn selected" onclick="selectIntensity('Easy', this)">Easy</div>
+                        <div class="preset-btn" onclick="selectIntensity('Medium', this)">Medium</div>
+                        <div class="preset-btn" onclick="selectIntensity('Hard', this)">Hard</div>
+                        <div class="preset-btn" onclick="selectIntensity('Extreme', this)">Extreme</div>
+                    </div>
+                    <input type="hidden" name="intensity" id="intensityInput" value="Easy">
+                </div>
+                
+
+                <div class="wizard-nav">
+                    <button type="button" class="btn-back" onclick="prevStep(3)">⬅ Back</button>
+                    <button type="submit" class="primary-btn">🔥 Save Workout</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- History output -->
+    {% if gym_logs %}
+    <div class="card" style="margin-top: 32px;">
+        <h2>Today's Workouts</h2>
+        <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Exercise</th>
+                    <th>Sets/Reps</th>
+                    <th>Weight</th>
+                    <th>Calories</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in gym_logs %}
+                <tr>
+                    <td>
+                        <strong>{{ log.muscle }}</strong><br>
+                        <small style="color:var(--text-muted)">{{ log.exercise }}</small>
+                    </td>
+                    <td>{{ log.sets }} × {{ log.reps }}</td>
+                    <td>{{ log.weight }} kg</td>
+                    <td>{{ log.calories | round }} kcal</td>
+                    <td class="action-cell">
+                        <a href="/gym/delete/{{ log.id }}?date={{ selected_date }}" class="action-btn delete-btn">🗑️</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
-<h1>Log Gym Workout</h1>
+<!-- ================= JS ================= -->
+<script>
+/* -------------------- WIZARD LOGIC -------------------- */
+const exercises = {
+    'Chest': ['Bench Press (Barbell)', 'Bench Press (Dumbbell)', 'Incline Press (Barbell)', 'Incline Press (Dumbbell)', 'Chest Fly (Machine)', 'Chest Fly (Dumbbell)', 'Cable Crossover', 'Pushups', 'Dips (Chest Focus)', 'Peck Deck'],
+    'Back': ['Deadlift', 'Pullups', 'Barbell Row', 'One Arm Dumbbell Row', 'Lat Pulldown', 'Seated Cable Row', 'T-Bar Row', 'Hyperextensions', 'Face Pulls', 'Straight Arm Pulldown'],
+    'Arms': ['Bicep Curls (Barbell)', 'Bicep Curls (Dumbbell)', 'Hammer Curls', 'Preacher Curls', 'Tricep Pushdown (Cable)', 'Skull Crushers', 'Tricep Extension (Dumbbell)', 'Dips (Tricep Focus)', 'Concentration Curls', 'Overhead Extension'],
+    'Legs': ['Squats (Barbell)', 'Leg Press', 'Lunges', 'Leg Extension', 'Leg Curls', 'Calf Raises (Standing)', 'Calf Raises (Seated)', 'Goblet Squats', 'Bulgarian Split Squats', 'Deadlift (Stiff Leg)'],
+    'Shoulders': ['Overhead Press (Barbell)', 'Shoulder Press (Dumbbell)', 'Lateral Raises (Dumbbell)', 'Lateral Raises (Cable)', 'Front Raises', 'Reverse Fly', 'Arnold Press', 'Upright Row', 'Shrugs', 'Military Press'],
+    'Core': ['Crunches', 'Plank', 'Leg Raises', 'Russian Twists', 'Ab Rollout', 'Mountian Climbers', 'Hanging Leg Raises', 'Treadmill (Running)', 'Cycling', 'Elliptical']
+};
 
-<form method="POST">
-    <label>Muscle Group:</label><br>
-    <select name="muscle" required>
-        <option>Chest</option>
-        <option>Back</option>
-        <option>Biceps</option>
-        <option>Triceps</option>
-        <option>Shoulders</option>
-        <option>Legs</option>
-    </select>
-    <br><br>
+function selectMuscle(muscle, el) {
+    document.querySelectorAll('.muscle-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('muscleInput').value = muscle;
+    
+    const exSelect = document.getElementById('exerciseSelect');
+    exSelect.innerHTML = '<option value="">Select exercise...</option>';
+    if (exercises[muscle]) {
+        exercises[muscle].forEach(ex => {
+            exSelect.innerHTML += `<option value="${ex}">${ex}</option>`;
+        });
+    }
+}
 
-    <label>Sets:</label><br>
-    <input type="number" name="sets" required>
-    <br><br>
+function nextStep(step) {
+    if (step === 2 && !document.getElementById('muscleInput').value) return alert('Select a muscle group first.');
+    if (step === 3 && !document.getElementById('exerciseSelect').value) return alert('Select an exercise first.');
+    
+    document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+    document.getElementById(`step${step}`).classList.add('active');
+}
 
-    <label>Reps:</label><br>
-    <input type="number" name="reps" required>
-    <br><br>
+function prevStep(step) {
+    document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+    document.getElementById(`step${step}`).classList.add('active');
+}
 
-    <label>Weight (kg):</label><br>
-    <input type="number" step="0.5" name="weight" value="0">
-    <br><br>
+function selectVal(type, val, el) {
+    document.querySelectorAll(`#${type}Presets .preset-btn`).forEach(b => b.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById(`${type}Input`).value = val;
+}
 
-    <label>Intensity:</label><br>
-    <select name="intensity">
-        <option>Easy</option>
-        <option>Medium</option>
-        <option>Hard</option>
-        <option>Extreme</option>
-    </select>
-    <br><br>
+function selectIntensity(val, el) {
+    document.querySelectorAll('#intensityPresets .preset-btn').forEach(b => b.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('intensityInput').value = val;
+}
 
-    <label>Duration (minutes):</label><br>
-    <input type="number" step="0.5" name="duration" value="0">
-    <br><br>
+function adjWeight(diff) {
+    const input = document.getElementById('weightInput');
+    let val = parseFloat(input.value) || 0;
+    val = Math.max(0, val + diff);
+    input.value = val;
+}
 
-    <button type="submit">Add Gym Workout</button>
-</form>
+{% if last_workout %}
+function repeatLastWorkout() {
+    document.getElementById('muscleInput').value = '{{ last_workout.muscle }}';
+    
+    // Repopulate explicitly so validation passes
+    const exSelect = document.getElementById('exerciseSelect');
+    exSelect.innerHTML = `<option value="{{ last_workout.exercise }}">{{ last_workout.exercise }}</option>`;
+    exSelect.value = '{{ last_workout.exercise }}';
+    
+    document.getElementById('setsInput').value = '{{ last_workout.sets }}';
+    document.getElementById('repsInput').value = '{{ last_workout.reps }}';
+    document.getElementById('weightInput').value = '{{ last_workout.weight }}';
+    document.getElementById('intensityInput').value = '{{ last_workout.intensity }}';
+    
+    // Highlight presets
+    selectVal('sets', '{{ last_workout.sets }}', 
+        document.querySelector(`#setsPresets .preset-btn:nth-child(2)`) || document.createElement('div')
+    ); // Optional UI match fallback
+    
+    // Jump straight to final step
+    document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+    document.getElementById('step4').classList.add('active');
+}
+{% endif %}
 
-<hr>
-<a href="/">Back to Dashboard</a>
+/* -------------------- DARK MODE -------------------- */
+const toggle = document.getElementById('themeToggle');
+toggle.onclick = () => {
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    toggle.innerText = isDark ? "☀️ Light" : "🌙 Dark";
+};
+
+if (localStorage.getItem('theme') === 'dark') {
+  document.body.classList.add('dark');
+  toggle.innerText = "☀️ Light";
+}
+</script>
+
+<script>
+const menuToggle = document.getElementById("menuToggle");
+const navMenu = document.getElementById("navMenu");
+
+menuToggle.addEventListener("click", () => {
+    navMenu.classList.toggle("active");
+    menuToggle.innerText = navMenu.classList.contains("active") ? "✕" : "☰";
+});
+
+document.addEventListener("click", (e) => {
+    if (!navMenu.contains(e.target) && !menuToggle.contains(e.target)) {
+        navMenu.classList.remove("active");
+        menuToggle.innerText = "☰";
+    }
+});
+</script>
 
 </body>
 </html>

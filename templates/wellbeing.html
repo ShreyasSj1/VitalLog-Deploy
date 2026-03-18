@@ -2,24 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Well-being Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Well-being Log</title>
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
 <!-- NAVBAR -->
-<div class="navbar">
-    <div class="nav-left">
+<nav class="navbar">
+    <div class="nav-left" id="navMenu">
         <a href="/">Dashboard</a>
         <a href="/food">Food</a>
         <a href="/sleep">Sleep</a>
         <a href="/wellbeing" class="active">Well-being</a>
+        <a href="/gym">Gym</a>
         <a href="/report">Report</a>
     </div>
 
     <button id="themeToggle" class="theme-btn">🌙 Dark</button>
-</div>
+    <button class="menu-toggle" id="menuToggle">☰</button>
+</nav>
 
 <div class="page-container">
 
@@ -35,7 +41,7 @@
             >
         </form>
 
-        <a href="/wellbeing" class="today-btn">📅 Today</a>
+        <a href="/wellbeing" class="today-btn">Today</a>
     </div>
 
     <!-- ADD ACTIVITY -->
@@ -89,6 +95,7 @@
         <h2>Logged Activities</h2>
 
         {% if wellbeing_logs %}
+        <div class="table-wrapper">
         <table class="log-table">
             <thead>
                 <tr>
@@ -114,6 +121,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
             <p class="empty-state">No well-being activities logged 🌱</p>
         {% endif %}
@@ -141,15 +149,27 @@ if (localStorage.getItem("theme") === "dark") {
 }
 
 toggleBtn.addEventListener("click", () => {
-    document.body.classList.add("theme-switching");
+    document.body.classList.toggle("dark");
+    const isDark = document.body.classList.contains("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    toggleBtn.innerText = isDark ? "☀️ Light" : "🌙 Dark";
+});
+</script>
 
-    setTimeout(() => {
-        document.body.classList.toggle("dark");
-        const isDark = document.body.classList.contains("dark");
-        localStorage.setItem("theme", isDark ? "dark" : "light");
-        toggleBtn.innerText = isDark ? "☀️ Light" : "🌙 Dark";
-        document.body.classList.remove("theme-switching");
-    }, 150);
+<script>
+const menuToggleElement = document.getElementById("menuToggle");
+const navMenuElement = document.getElementById("navMenu");
+
+menuToggleElement.addEventListener("click", () => {
+    navMenuElement.classList.toggle("active");
+    menuToggleElement.innerText = navMenuElement.classList.contains("active") ? "✕" : "☰";
+});
+
+document.addEventListener("click", (e) => {
+    if (!navMenuElement.contains(e.target) && !menuToggleElement.contains(e.target)) {
+        navMenuElement.classList.remove("active");
+        menuToggleElement.innerText = "☰";
+    }
 });
 </script>
 
