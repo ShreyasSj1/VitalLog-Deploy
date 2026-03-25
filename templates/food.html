@@ -8,24 +8,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
 
-<!-- NAVBAR -->
-<nav class="navbar">
-    <div class="nav-left" id="navMenu">
-        <a href="/">Dashboard</a>
-        <a href="/food" class="active">Food</a>
-        <a href="/sleep">Sleep</a>
-        <a href="/wellbeing">Well-being</a>
-        <a href="/gym">Gym</a>
-        <a href="/report">Report</a>
-    </div>
-    <button id="themeToggle" class="theme-btn">🌙 Dark</button>
-    <button class="menu-toggle" id="menuToggle">☰</button>
-</nav>
+{% include "_navbar.html" %}
 
 <div class="page-container">
+    {% include "_flash_messages.html" %}
 
     <!-- DATE CONTROL -->
     <div class="date-control">
@@ -34,6 +24,7 @@
                 type="date"
                 name="date"
                 value="{{ selected_date }}"
+                max="{{ max_date }}"
                 onchange="this.form.submit()"
                 class="date-input"
             >
@@ -125,10 +116,14 @@
                        class="action-btn edit-btn"
                        title="Edit">✏️</a>
 
-                    <a href="/food/delete/{{ f.id }}?date={{ selected_date }}"
-                       class="action-btn delete-btn"
-                       title="Delete"
-                       onclick="return confirm('Delete this item?')">🗑</a>
+                    <form method="post"
+                          action="{{ url_for('delete_food', item_id=f.id) }}"
+                          class="inline-form"
+                          onsubmit="return confirm('Delete this item?')">
+                        <input type="hidden" name="date" value="{{ selected_date }}">
+                    <button type="submit" class="action-btn delete-btn" title="Delete">
+                        <i class="fa-regular fa-trash-can"></i>                    </button>                    
+                    </form>
                 </td>
             </tr>
             {% endfor %}
@@ -197,17 +192,26 @@ toggleBtn.addEventListener("click", () => {
 const menuToggleElement = document.getElementById("menuToggle");
 const navMenuElement = document.getElementById("navMenu");
 
+function syncMenuButton() {
+    const isOpen = navMenuElement.classList.contains("active");
+    menuToggleElement.innerText = isOpen ? "✕" : "☰";
+    menuToggleElement.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    menuToggleElement.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
+}
+
 menuToggleElement.addEventListener("click", () => {
     navMenuElement.classList.toggle("active");
-    menuToggleElement.innerText = navMenuElement.classList.contains("active") ? "✕" : "☰";
+    syncMenuButton();
 });
 
 document.addEventListener("click", (e) => {
     if (!navMenuElement.contains(e.target) && !menuToggleElement.contains(e.target)) {
         navMenuElement.classList.remove("active");
-        menuToggleElement.innerText = "☰";
+        syncMenuButton();
     }
 });
+
+syncMenuButton();
 </script>
 
 </body>

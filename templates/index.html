@@ -14,23 +14,11 @@
 
 <body class="{{ 'dark' if dark_mode else '' }}">
 
-<!-- NAVBAR -->
-  <div class="navbar">
-    <div class="nav-left" id="navMenu">
-      <a href="/" class="active">Dashboard</a>
-      <a href="/food">Food</a>
-      <a href="/sleep">Sleep</a>
-      <a href="/wellbeing">Well-being</a>
-      <a href="/gym">Gym</a>
-      <a href="/report">Report</a>
-    </div>
-
-    <button id="themeToggle" class="theme-btn">🌙 Dark</button>
-    <button class="menu-toggle" id="menuToggle">☰</button>
-  </div>
+{% include "_navbar.html" %}
 
 <!-- PAGE CONTAINER -->
 <div class="page-container">
+  {% include "_flash_messages.html" %}
 
   <!-- DATE PICKER -->
   <form method="get" class="date-control">
@@ -38,6 +26,7 @@
         type="date"
         name="date"
         value="{{ selected_date }}"
+        max="{{ max_date }}"
         onchange="this.form.submit()"
         class="date-input"
     >
@@ -308,17 +297,26 @@ new Chart(scoreCtx, {
 const menuToggleElement = document.getElementById("menuToggle");
 const navMenuElement = document.getElementById("navMenu");
 
+function syncMenuButton() {
+    const isOpen = navMenuElement.classList.contains("active");
+    menuToggleElement.innerText = isOpen ? "✕" : "☰";
+    menuToggleElement.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    menuToggleElement.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
+}
+
 menuToggleElement.addEventListener("click", () => {
     navMenuElement.classList.toggle("active");
-    menuToggleElement.innerText = navMenuElement.classList.contains("active") ? "✕" : "☰";
+    syncMenuButton();
 });
 
 document.addEventListener("click", (e) => {
     if (!navMenuElement.contains(e.target) && !menuToggleElement.contains(e.target)) {
         navMenuElement.classList.remove("active");
-        menuToggleElement.innerText = "☰";
+        syncMenuButton();
     }
 });
+
+syncMenuButton();
 </script>
 
 </body>

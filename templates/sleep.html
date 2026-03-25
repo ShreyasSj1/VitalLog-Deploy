@@ -12,22 +12,10 @@
 </head>
 <body>
 
-<!-- NAVBAR -->
-<nav class="navbar">
-    <div class="nav-left" id="navMenu">
-        <a href="/">Dashboard</a>
-        <a href="/food">Food</a>
-        <a href="/sleep" class="active">Sleep</a>
-        <a href="/wellbeing">Well-being</a>
-        <a href="/gym">Gym</a>
-        <a href="/report">Report</a>
-    </div>
-
-    <button id="themeToggle" class="theme-btn">🌙 Dark</button>
-    <button class="menu-toggle" id="menuToggle">☰</button>
-</nav>
+{% include "_navbar.html" %}
 
 <div class="page-container">
+    {% include "_flash_messages.html" %}
 
     <!-- DATE CONTROL -->
     <div class="date-control">
@@ -36,6 +24,7 @@
                 type="date"
                 name="date"
                 value="{{ selected_date }}"
+                max="{{ max_date }}"
                 onchange="this.form.submit()"
                 class="date-input"
             >
@@ -104,12 +93,13 @@
         </div>
 
         <div class="summary-right">
-            <a href="/sleep/delete?date={{ selected_date }}"
-               class="icon-btn danger"
-               title="Delete Sleep Log"
-               onclick="return confirm('Delete sleep log for this date?')">
-                🗑
-            </a>
+            <form method="post"
+                  action="{{ url_for('delete_sleep') }}"
+                  class="inline-form"
+                  onsubmit="return confirm('Delete sleep log for this date?')">
+                <input type="hidden" name="date" value="{{ selected_date }}">
+                <button type="submit" class="icon-btn danger" title="Delete Sleep Log">🗑</button>
+            </form>
         </div>
     </div>
     {% endif %}
@@ -138,17 +128,26 @@ toggleBtn.addEventListener("click", () => {
 const menuToggle = document.getElementById("menuToggle");
 const navMenu = document.getElementById("navMenu");
 
+function syncMenuButton() {
+    const isOpen = navMenu.classList.contains("active");
+    menuToggle.innerText = isOpen ? "✕" : "☰";
+    menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    menuToggle.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
+}
+
 menuToggle.addEventListener("click", () => {
     navMenu.classList.toggle("active");
-    menuToggle.innerText = navMenu.classList.contains("active") ? "✕" : "☰";
+    syncMenuButton();
 });
 
 document.addEventListener("click", (e) => {
     if (!navMenu.contains(e.target) && !menuToggle.contains(e.target)) {
         navMenu.classList.remove("active");
-        menuToggle.innerText = "☰";
+        syncMenuButton();
     }
 });
+
+syncMenuButton();
 </script>
 
 </body>

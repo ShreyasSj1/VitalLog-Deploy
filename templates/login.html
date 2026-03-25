@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Back In The Zone</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-body">
+    <div class="login-shell">
+        <div class="login-card">
+            <p class="eyebrow">Fitness Tracker</p>
+            <h1>Get back in the zone.</h1>
+            <p class="login-copy">
+                Log in to track workouts, meals, sleep, and every win that moves you forward.
+            </p>
+
+            {% include "_flash_messages.html" %}
+
+            <form method="post" class="auth-form">
+                <div class="form-row">
+                    <label>Email</label>
+                    <input type="email" name="email" required autocomplete="email">
+                </div>
+
+                <div class="form-row">
+                    <label>Password</label>
+                    <input type="password" name="password" required autocomplete="current-password">
+                </div>
+
+                <button type="submit" class="primary-btn login-btn">Jump Back In</button>
+            </form>
+
+            <p class="auth-link-row">
+                <a href="{{ url_for('forgot_password') }}">Forgot your password?</a>
+            </p>
+
+            <p class="auth-switch">
+                New here? <a href="{{ url_for('register') }}">Create New Identity</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+    if (localStorage.getItem("theme") === "dark") {
+        document.body.classList.add("dark");
+    }
+    </script>
+</body>
+</html>

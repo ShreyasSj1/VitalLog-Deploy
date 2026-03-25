@@ -11,22 +11,10 @@
 </head>
 <body class="{{ 'dark' if dark_mode else '' }}">
 
-<!-- NAVBAR -->
-<nav class="navbar">
-    <div class="nav-left" id="navMenu">
-        <a href="/">Dashboard</a>
-        <a href="/food">Food</a>
-        <a href="/sleep">Sleep</a>
-        <a href="/wellbeing">Well-being</a>
-        <a href="/gym" class="active">Gym</a>
-        <a href="/report">Report</a>
-    </div>
-
-    <button id="themeToggle" class="theme-btn">🌙 Dark</button>
-    <button class="menu-toggle" id="menuToggle">☰</button>
-</nav>
+{% include "_navbar.html" %}
 
 <div class="page-container">
+    {% include "_flash_messages.html" %}
     <!-- DATE CONTROL -->
     <div class="date-control">
         <form method="get">
@@ -34,6 +22,7 @@
                 type="date"
                 name="date"
                 value="{{ selected_date }}"
+                max="{{ max_date }}"
                 onchange="this.form.submit()"
                 class="date-input"
             >
@@ -49,7 +38,14 @@
     <div class="repeat-card" onclick="repeatLastWorkout()">
         <div class="repeat-info">
             <h4>Repeat Last Workout</h4>
-            <p>{{ last_workout.muscle }} - {{ last_workout.exercise }} ({{ last_workout.sets }} sets × {{ last_workout.reps }} reps) - {{ last_workout.weight }}kg</p>
+            <p>
+                {{ last_workout.muscle }} - {{ last_workout.exercise }}
+                {% if last_workout.exercise in cardio_exercises %}
+                    ({{ last_workout.duration | round(1) }} min · {{ last_workout.speed | round(1) }} km/h{% if last_workout.exercise == 'Inclined Walking' %} · incline {{ last_workout.incline | round(1) }}{% endif %} · {{ last_workout.intensity }})
+                {% else %}
+                    ({{ last_workout.sets }} sets × {{ last_workout.reps }} reps · {{ last_workout.weight }}kg)
+                {% endif %}
+            </p>
         </div>
         <div class="repeat-icon">⚡</div>
     </div>
@@ -109,28 +105,67 @@
                 </div>
             </div>
 
-            <!-- Step 3: Sets & Reps -->
+            <!-- Step 3: Strength or Cardio Inputs -->
             <div class="wizard-step" id="step3">
-                <h3>Sets & Reps</h3>
-                <div class="form-row">
+                <h3 id="step3Title">Sets & Reps</h3>
+                <div class="form-row strength-field">
                     <label>Sets</label>
                     <div class="preset-container" id="setsPresets">
+                        <div class="preset-btn" onclick="selectVal('sets', 1, this)">1</div>
                         <div class="preset-btn" onclick="selectVal('sets', 3, this)">3</div>
-                        <div class="preset-btn" onclick="selectVal('sets', 4, this)">4</div>
                         <div class="preset-btn" onclick="selectVal('sets', 5, this)">5</div>
                     </div>
                     <input type="number" name="sets" id="setsInput" class="form-control" placeholder="Custom sets" style="margin-top:12px; display:none;">
                 </div>
 
-                <div class="form-row" style="margin-top: 24px;">
+                <div class="form-row strength-field" style="margin-top: 24px;">
                     <label>Reps per set</label>
                     <div class="preset-container" id="repsPresets">
                         <div class="preset-btn" onclick="selectVal('reps', 8, this)">8</div>
                         <div class="preset-btn" onclick="selectVal('reps', 10, this)">10</div>
-                        <div class="preset-btn" onclick="selectVal('reps', 12, this)">12</div>
                         <div class="preset-btn" onclick="selectVal('reps', 15, this)">15</div>
+                        <div class="preset-btn" onclick="selectVal('reps', 25, this)">25</div>
                     </div>
                     <input type="number" name="reps" id="repsInput" class="form-control" placeholder="Custom reps" style="margin-top:12px; display:none;">
+                </div>
+
+                <div class="form-row cardio-field" style="display:none;">
+                    <label for="durationInput">Time (minutes)</label>
+                    <div class="range-field">
+                        <div class="range-value"><span id="durationValue">20</span><small>min</small></div>
+                        <input type="range" name="duration" id="durationInput" min="5" max="120" step="5" value="20" class="range-slider" oninput="syncRangeValue('durationInput', 'durationValue', 0)">
+                        <div class="range-scale">
+                            <span>5</span>
+                            <span>60</span>
+                            <span>120</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row cardio-field" style="margin-top: 24px; display:none;">
+                    <label id="speedLabel" for="speedInput">Speed (km/h)</label>
+                    <div class="range-field">
+                        <div class="range-value"><span id="speedValue">6.0</span><small>km/h</small></div>
+                        <input type="range" step="0.5" name="speed" id="speedInput" min="0" max="25" value="6" class="range-slider" oninput="syncRangeValue('speedInput', 'speedValue', 1)">
+                        <div class="range-scale">
+                            <span>0</span>
+                            <span>12.5</span>
+                            <span>25</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row cardio-incline-field" style="margin-top: 24px; display:none;">
+                    <label for="inclineInput">Incline</label>
+                    <div class="range-field">
+                        <div class="range-value"><span id="inclineValue">0.0</span><small>%</small></div>
+                        <input type="range" step="0.5" name="incline" id="inclineInput" min="0" max="15" value="0" class="range-slider" oninput="syncRangeValue('inclineInput', 'inclineValue', 1)">
+                        <div class="range-scale">
+                            <span>0</span>
+                            <span>7.5</span>
+                            <span>15</span>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="wizard-nav">
@@ -143,7 +178,7 @@
             <div class="wizard-step" id="step4">
                 <h3>Workout Details</h3>
                 
-                <div class="form-row">
+                <div class="form-row strength-field">
                     <label>Weight (kg)</label>
                     <div class="increment-wrapper">
                         <button type="button" class="increment-btn" onclick="adjWeight(-2.5)">-</button>
@@ -181,8 +216,8 @@
             <thead>
                 <tr>
                     <th>Exercise</th>
-                    <th>Sets/Reps</th>
-                    <th>Weight</th>
+                    <th>Volume / Time</th>
+                    <th>Weight / Speed</th>
                     <th>Calories</th>
                     <th>Action</th>
                 </tr>
@@ -194,11 +229,22 @@
                         <strong>{{ log.muscle }}</strong><br>
                         <small style="color:var(--text-muted)">{{ log.exercise }}</small>
                     </td>
+                    {% if log.exercise in cardio_exercises %}
+                    <td>{{ log.duration | round(1) }} min · {{ log.intensity }}</td>
+                    <td>{{ log.speed | round(1) }} km/h{% if log.exercise == 'Inclined Walking' %} · incline {{ log.incline | round(1) }}{% endif %}</td>
+                    {% else %}
                     <td>{{ log.sets }} × {{ log.reps }}</td>
                     <td>{{ log.weight }} kg</td>
+                    {% endif %}
                     <td>{{ log.calories | round }} kcal</td>
                     <td class="action-cell">
-                        <a href="/gym/delete/{{ log.id }}?date={{ selected_date }}" class="action-btn delete-btn">🗑️</a>
+                        <form method="post"
+                              action="{{ url_for('delete_gym', item_id=log.id) }}"
+                              class="inline-form"
+                              onsubmit="return confirm('Delete this workout?')">
+                            <input type="hidden" name="date" value="{{ selected_date }}">
+                            <button type="submit" class="action-btn delete-btn">🗑️</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
@@ -218,8 +264,9 @@ const exercises = {
     'Arms': ['Bicep Curls (Barbell)', 'Bicep Curls (Dumbbell)', 'Hammer Curls', 'Preacher Curls', 'Tricep Pushdown (Cable)', 'Skull Crushers', 'Tricep Extension (Dumbbell)', 'Dips (Tricep Focus)', 'Concentration Curls', 'Overhead Extension'],
     'Legs': ['Squats (Barbell)', 'Leg Press', 'Lunges', 'Leg Extension', 'Leg Curls', 'Calf Raises (Standing)', 'Calf Raises (Seated)', 'Goblet Squats', 'Bulgarian Split Squats', 'Deadlift (Stiff Leg)'],
     'Shoulders': ['Overhead Press (Barbell)', 'Shoulder Press (Dumbbell)', 'Lateral Raises (Dumbbell)', 'Lateral Raises (Cable)', 'Front Raises', 'Reverse Fly', 'Arnold Press', 'Upright Row', 'Shrugs', 'Military Press'],
-    'Core': ['Crunches', 'Plank', 'Leg Raises', 'Russian Twists', 'Ab Rollout', 'Mountian Climbers', 'Hanging Leg Raises', 'Treadmill (Running)', 'Cycling', 'Elliptical']
+    'Core': ['Crunches', 'Plank', 'Leg Raises', 'Russian Twists', 'Ab Rollout', 'Mountian Climbers', 'Hanging Leg Raises', 'Treadmill (Running)', 'Cycling', 'Elliptical', 'Inclined Walking']
 };
+const cardioExercises = {{ cardio_exercises | tojson }};
 
 function selectMuscle(muscle, el) {
     document.querySelectorAll('.muscle-card').forEach(c => c.classList.remove('selected'));
@@ -233,11 +280,36 @@ function selectMuscle(muscle, el) {
             exSelect.innerHTML += `<option value="${ex}">${ex}</option>`;
         });
     }
+
+    updateExerciseMode();
+}
+
+function currentExerciseIsCardio() {
+    return cardioExercises.includes(document.getElementById('exerciseSelect').value);
+}
+
+function updateExerciseMode() {
+    const isCardio = currentExerciseIsCardio();
+    const exercise = document.getElementById('exerciseSelect').value;
+    document.getElementById('step3Title').innerText = isCardio ? 'Time & Speed' : 'Sets & Reps';
+    document.getElementById('speedLabel').innerText = exercise === 'Inclined Walking' ? 'Walking Speed (km/h)' : 'Speed (km/h)';
+    document.querySelectorAll('.strength-field').forEach(el => {
+        el.style.display = isCardio ? 'none' : '';
+    });
+    document.querySelectorAll('.cardio-field').forEach(el => {
+        el.style.display = isCardio ? '' : 'none';
+    });
+    document.querySelectorAll('.cardio-incline-field').forEach(el => {
+        el.style.display = exercise === 'Inclined Walking' ? '' : 'none';
+    });
 }
 
 function nextStep(step) {
     if (step === 2 && !document.getElementById('muscleInput').value) return alert('Select a muscle group first.');
     if (step === 3 && !document.getElementById('exerciseSelect').value) return alert('Select an exercise first.');
+    if (step === 4 && currentExerciseIsCardio() && !(parseFloat(document.getElementById('durationInput').value) > 0)) {
+        return alert('Add the time spent for this cardio workout.');
+    }
     
     document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
     document.getElementById(`step${step}`).classList.add('active');
@@ -260,12 +332,20 @@ function selectIntensity(val, el) {
     document.getElementById('intensityInput').value = val;
 }
 
+function syncRangeValue(inputId, outputId, decimals = 0) {
+    const input = document.getElementById(inputId);
+    const output = document.getElementById(outputId);
+    output.innerText = Number(input.value).toFixed(decimals);
+}
+
 function adjWeight(diff) {
     const input = document.getElementById('weightInput');
     let val = parseFloat(input.value) || 0;
     val = Math.max(0, val + diff);
     input.value = val;
 }
+
+document.getElementById('exerciseSelect').addEventListener('change', updateExerciseMode);
 
 {% if last_workout %}
 function repeatLastWorkout() {
@@ -279,7 +359,14 @@ function repeatLastWorkout() {
     document.getElementById('setsInput').value = '{{ last_workout.sets }}';
     document.getElementById('repsInput').value = '{{ last_workout.reps }}';
     document.getElementById('weightInput').value = '{{ last_workout.weight }}';
+    document.getElementById('durationInput').value = '{{ last_workout.duration }}';
+    document.getElementById('speedInput').value = '{{ last_workout.speed }}';
+    document.getElementById('inclineInput').value = '{{ last_workout.incline }}';
     document.getElementById('intensityInput').value = '{{ last_workout.intensity }}';
+    syncRangeValue('durationInput', 'durationValue', 0);
+    syncRangeValue('speedInput', 'speedValue', 1);
+    syncRangeValue('inclineInput', 'inclineValue', 1);
+    updateExerciseMode();
     
     // Highlight presets
     selectVal('sets', '{{ last_workout.sets }}', 
@@ -291,6 +378,11 @@ function repeatLastWorkout() {
     document.getElementById('step4').classList.add('active');
 }
 {% endif %}
+
+updateExerciseMode();
+syncRangeValue('durationInput', 'durationValue', 0);
+syncRangeValue('speedInput', 'speedValue', 1);
+syncRangeValue('inclineInput', 'inclineValue', 1);
 
 /* -------------------- DARK MODE -------------------- */
 const toggle = document.getElementById('themeToggle');
@@ -311,17 +403,26 @@ if (localStorage.getItem('theme') === 'dark') {
 const menuToggle = document.getElementById("menuToggle");
 const navMenu = document.getElementById("navMenu");
 
+function syncMenuButton() {
+    const isOpen = navMenu.classList.contains("active");
+    menuToggle.innerText = isOpen ? "✕" : "☰";
+    menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    menuToggle.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
+}
+
 menuToggle.addEventListener("click", () => {
     navMenu.classList.toggle("active");
-    menuToggle.innerText = navMenu.classList.contains("active") ? "✕" : "☰";
+    syncMenuButton();
 });
 
 document.addEventListener("click", (e) => {
     if (!navMenu.contains(e.target) && !menuToggle.contains(e.target)) {
         navMenu.classList.remove("active");
-        menuToggle.innerText = "☰";
+        syncMenuButton();
     }
 });
+
+syncMenuButton();
 </script>
 
 </body>

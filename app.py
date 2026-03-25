@@ -1,16 +1,46 @@
-from flask import Flask, render_template, request, redirect, url_for
+import os
+import secrets
 import sqlite3
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from functools import wraps
+from urllib.parse import urljoin, urlparse
+
+from flask import (
+    Flask,
+    abort,
+    flash,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-in-production")
+
 DB_NAME = "fitness.db"
+
+login_manager = LoginManager()
+login_manager.login_view = "login"
+login_manager.init_app(app)
+
 
 # ================= DAILY GOALS =================
 GOALS = {
     "calories": 1500,
     "protein": 80,
     "fat": 40,
-    "sugar": 20
+    "sugar": 20,
 }
 
 # ================= FOOD DATA =================
@@ -30,7 +60,7 @@ FOOD_DATA = {
         "Omelette": (120, 6, 9, 1),
         "Boiled Eggs": (78, 6, 5, 0),
         "Milk (200ml)": (120, 6, 6, 10),
-        "Tea / Coffee": (90, 2.5, 3, 7)
+        "Tea / Coffee": (90, 2.5, 3, 7),
     },
     "Lunch": {
         "Chapati": (90, 3, 3, 0),
@@ -45,14 +75,14 @@ FOOD_DATA = {
         "Chicken Curry": (300, 25, 15, 1),
         "Chicken Biryani": (350, 20, 12, 2),
         "Fish Curry": (220, 22, 10, 0),
-        "Curd (Plain)": (60, 3, 3, 2)
+        "Curd (Plain)": (60, 3, 3, 2),
     },
-    "Pre/Post Workout":{
-        "Protein Shake (Milk)": (350, 42, 2, 3),
-        "Protein Shake (Water)" : (150, 30, 1, 2),
+    "Pre/Post Workout": {
+        "Protein Shake (Milk)": (450, 45, 15, 15),
+        "Protein Shake (Water)": (150, 30, 1, 2),
         "Banana": (105, 1, 0.4, 14),
         "Peanut Butter Sandwich": (380, 10, 16, 8),
-        "Greek Yogurt": (130, 23, 2, 6)
+        "Greek Yogurt": (130, 23, 2, 6),
     },
     "Snacks": {
         "Samosa": (265, 4, 16, 1),
@@ -65,7 +95,7 @@ FOOD_DATA = {
         "Biscuits": (70, 1, 3, 5),
         "Fruit Bowl": (120, 2, 0.5, 15),
         "Protein Bar": (200, 15, 7, 5),
-        "Nuts (Handful)": (170, 6, 14, 2)
+        "Nuts (Handful)": (170, 6, 14, 2),
     },
     "Dinner": {
         "Chapati": (90, 3, 3, 0),
@@ -79,121 +109,696 @@ FOOD_DATA = {
         "Egg Curry": (190, 12, 14, 1),
         "Vegetable Stir Fry": (120, 4, 6, 3),
         "Soup (Veg)": (90, 3, 2, 4),
-        "Salad": (80, 2, 3, 4)
-    }
+        "Salad": (80, 2, 3, 4),
+    },
 }
+
+CARDIO_EXERCISES = {"Treadmill (Running)", "Cycling", "Elliptical", "Inclined Walking"}
+
+
+class User(UserMixin):
+    def __init__(self, row):
+        self.id = row["id"]
+        self.email = row["email"]
+        self.name = row["name"] or row["email"]
+        self.age = row["age"]
+        self.height = row["height"]
+        self.weight = row["weight"]
+        self.role = row["role"]
+        self.active = bool(row["is_active"])
+
+    @property
+    def is_active(self):
+        return self.active
+
 
 # ================= DB HELPERS =================
 def get_db():
     db = sqlite3.connect(DB_NAME)
     db.row_factory = sqlite3.Row
+    db.execute("PRAGMA foreign_keys = ON")
     return db
 
-def init_db():
+
+def table_columns(db, table_name):
+    return {row["name"] for row in db.execute(f"PRAGMA table_info({table_name})").fetchall()}
+
+
+def index_columns(db, index_name):
+    rows = db.execute(f"PRAGMA index_info({index_name})").fetchall()
+    return [row["name"] for row in rows]
+
+
+def sleep_log_has_user_unique_index(db):
+    indexes = db.execute("PRAGMA index_list(sleep_log)").fetchall()
+    for idx in indexes:
+        if idx["unique"] and index_columns(db, idx["name"]) == ["user_id", "date"]:
+            return True
+    return False
+
+
+def ensure_column(db, table_name, column_name, definition):
+    if column_name not in table_columns(db, table_name):
+        try:
+            db.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" not in str(exc).lower():
+                raise
+
+
+def migrate_users_table(db):
+    columns = table_columns(db, "users")
+    expected = {
+        "id",
+        "email",
+        "password_hash",
+        "name",
+        "age",
+        "height",
+        "weight",
+        "role",
+        "is_active",
+        "created_at",
+    }
+    if columns == expected:
+        return
+
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            name TEXT,
+            age INTEGER,
+            height REAL,
+            weight REAL,
+            role TEXT NOT NULL DEFAULT 'user',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    if "users" in {
+        row["name"] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }:
+        password_expr = (
+            "password_hash"
+            if "password_hash" in columns
+            else "'__migrate_me__'"
+        )
+        created_expr = "created_at" if "created_at" in columns else "CURRENT_TIMESTAMP"
+        name_expr = "name" if "name" in columns else "email"
+        age_expr = "age" if "age" in columns else "NULL"
+        height_expr = "height" if "height" in columns else "NULL"
+        weight_expr = "weight" if "weight" in columns else "NULL"
+        role_expr = "role" if "role" in columns else "'user'"
+        active_expr = "is_active" if "is_active" in columns else "1"
+
+        db.execute(
+            f"""
+            INSERT INTO users_new (id, email, password_hash, name, age, height, weight, role, is_active, created_at)
+            SELECT id, email, {password_expr}, {name_expr}, {age_expr}, {height_expr}, {weight_expr}, {role_expr}, {active_expr}, {created_expr}
+            FROM users
+            """
+        )
+        db.execute("DROP TABLE users")
+
+    db.execute("ALTER TABLE users_new RENAME TO users")
+
+
+def migrate_sleep_log_table(db):
+    columns = table_columns(db, "sleep_log")
+    if "user_id" in columns and sleep_log_has_user_unique_index(db):
+        return
+
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sleep_log_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            date TEXT,
+            hours REAL,
+            quality INTEGER,
+            notes TEXT,
+            UNIQUE(user_id, date),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+
+    if "user_id" in columns:
+        db.execute(
+            """
+            INSERT INTO sleep_log_new (id, user_id, date, hours, quality, notes)
+            SELECT id, user_id, date, hours, quality, notes
+            FROM sleep_log
+            """
+        )
+    else:
+        db.execute(
+            """
+            INSERT INTO sleep_log_new (id, date, hours, quality, notes)
+            SELECT id, date, hours, quality, notes
+            FROM sleep_log
+            """
+        )
+
+    db.execute("DROP TABLE sleep_log")
+    db.execute("ALTER TABLE sleep_log_new RENAME TO sleep_log")
+
+
+def migrate_schema():
     db = get_db()
 
-    with open('schema.sql') as f:
+    with open("schema.sql", encoding="utf-8") as f:
         db.executescript(f.read())
+
+    migrate_users_table(db)
+    ensure_column(db, "users", "age", "INTEGER")
+    ensure_column(db, "users", "height", "REAL")
+    ensure_column(db, "users", "weight", "REAL")
+    ensure_column(db, "food_log", "user_id", "INTEGER")
+    ensure_column(db, "wellbeing_log", "user_id", "INTEGER")
+    ensure_column(db, "gym_log", "user_id", "INTEGER")
+    ensure_column(db, "gym_log", "speed", "REAL")
+    ensure_column(db, "gym_log", "incline", "REAL")
+    migrate_sleep_log_table(db)
+
+    db.execute("CREATE INDEX IF NOT EXISTS idx_food_log_user_date ON food_log(user_id, date)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_sleep_log_user_date ON sleep_log(user_id, date)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_wellbeing_log_user_date ON wellbeing_log(user_id, date)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_gym_log_user_date ON gym_log(user_id, date)")
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token)"
+    )
 
     db.commit()
     db.close()
 
+
+def init_db():
+    migrate_schema()
+
+
+def get_user_by_id(user_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    db.close()
+    return User(row) if row else None
+
+
+def get_user_by_email(email):
+    db = get_db()
+    row = db.execute("SELECT * FROM users WHERE email = ?", (email.lower(),)).fetchone()
+    db.close()
+    return row
+
+
+def parse_admin_emails():
+    raw = os.environ.get("ADMIN_EMAILS", "")
+    return {email.strip().lower() for email in raw.split(",") if email.strip()}
+
+
+def default_role_for_email(db, email):
+    if email.lower() in parse_admin_emails():
+        return "admin"
+
+    user_count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    return "admin" if user_count == 0 else "user"
+
+
+def claim_legacy_rows(db, user_id):
+    user_count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if user_count != 1:
+        return
+
+    for table_name in ("food_log", "sleep_log", "wellbeing_log", "gym_log"):
+        db.execute(f"UPDATE {table_name} SET user_id = ? WHERE user_id IS NULL", (user_id,))
+
+
+def create_user(name, email, password):
+    db = get_db()
+    normalized_email = email.strip().lower()
+    existing = db.execute("SELECT id FROM users WHERE email = ?", (normalized_email,)).fetchone()
+    if existing:
+        db.close()
+        return None, "An account with that email already exists."
+
+    role = default_role_for_email(db, normalized_email)
+    cursor = db.execute(
+        """
+        INSERT INTO users (email, password_hash, name, role, is_active)
+        VALUES (?, ?, ?, ?, 1)
+        """,
+        (normalized_email, generate_password_hash(password), name.strip() or normalized_email, role),
+    )
+    user_id = cursor.lastrowid
+    claim_legacy_rows(db, user_id)
+    db.commit()
+    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    db.close()
+    return User(row), None
+
+
+def now_utc():
+    return datetime.now(timezone.utc)
+
+
+def utc_iso(dt):
+    return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def parse_utc_iso(value):
+    return datetime.fromisoformat(value)
+
+
+def issue_password_reset_token(email):
+    db = get_db()
+    normalized_email = email.strip().lower()
+    user = db.execute("SELECT id, email FROM users WHERE email = ?", (normalized_email,)).fetchone()
+    if not user:
+        db.close()
+        return None
+
+    db.execute(
+        """
+        UPDATE password_reset_tokens
+        SET used_at = ?
+        WHERE user_id = ? AND used_at IS NULL
+        """,
+        (utc_iso(now_utc()), user["id"]),
+    )
+
+    token = secrets.token_urlsafe(32)
+    expires_at = now_utc() + timedelta(minutes=30)
+    db.execute(
+        """
+        INSERT INTO password_reset_tokens (user_id, token, expires_at)
+        VALUES (?, ?, ?)
+        """,
+        (user["id"], token, utc_iso(expires_at)),
+    )
+    db.commit()
+    db.close()
+    return token
+
+
+def get_valid_password_reset_token(token):
+    db = get_db()
+    row = db.execute(
+        """
+        SELECT password_reset_tokens.*, users.email
+        FROM password_reset_tokens
+        JOIN users ON users.id = password_reset_tokens.user_id
+        WHERE password_reset_tokens.token = ?
+        """,
+        (token,),
+    ).fetchone()
+    db.close()
+
+    if not row or row["used_at"]:
+        return None
+
+    if parse_utc_iso(row["expires_at"]) < now_utc():
+        return None
+
+    return row
+
+
+def consume_password_reset_token(token, new_password):
+    token_row = get_valid_password_reset_token(token)
+    if not token_row:
+        return False
+
+    db = get_db()
+    used_at = utc_iso(now_utc())
+    db.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (generate_password_hash(new_password), token_row["user_id"]),
+    )
+    db.execute(
+        "UPDATE password_reset_tokens SET used_at = ? WHERE token = ?",
+        (used_at, token),
+    )
+    db.execute(
+        """
+        UPDATE password_reset_tokens
+        SET used_at = ?
+        WHERE user_id = ? AND token != ? AND used_at IS NULL
+        """,
+        (used_at, token_row["user_id"], token),
+    )
+    db.commit()
+    db.close()
+    return True
+
+
+# ================= AUTH HELPERS =================
+def render_page(template_name, **context):
+    return render_template(template_name, **context)
+
+
+def parse_optional_int(value):
+    value = (value or "").strip()
+    return int(value) if value else None
+
+
+def parse_optional_float(value):
+    value = (value or "").strip()
+    return float(value) if value else None
+
+
+def is_safe_redirect_target(target):
+    if not target:
+        return False
+    host_url = urlparse(request.host_url)
+    redirect_url = urlparse(urljoin(request.host_url, target))
+    return redirect_url.scheme in ("http", "https") and host_url.netloc == redirect_url.netloc
+
+
+def next_redirect_target(default_endpoint="index"):
+    target = session.pop("next_url", None)
+    if is_safe_redirect_target(target):
+        return target
+    return url_for(default_endpoint)
+
+
+def role_required(*roles):
+    def decorator(view_func):
+        @wraps(view_func)
+        @login_required
+        def wrapped_view(*args, **kwargs):
+            if current_user.role not in roles:
+                abort(403)
+            return view_func(*args, **kwargs)
+
+        return wrapped_view
+
+    return decorator
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return get_user_by_id(int(user_id))
+
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    session["next_url"] = request.url
+    return redirect(url_for("login"))
+
+
 # ================= UTIL =================
+def normalize_selected_date(raw_date):
+    today_iso = date.today().isoformat()
+    if not raw_date:
+        return today_iso
+
+    try:
+        parsed = datetime.strptime(raw_date, "%Y-%m-%d").date()
+    except ValueError:
+        return today_iso
+
+    return min(parsed, date.today()).isoformat()
+
+
+def is_cardio_exercise(exercise_name):
+    return exercise_name in CARDIO_EXERCISES
+
+
 def get_week_dates(selected_date):
     d = datetime.strptime(selected_date, "%Y-%m-%d")
     start = d - timedelta(days=6)
     return [(start + timedelta(days=i)).date().isoformat() for i in range(7)]
 
+
+# ================= AUTH =================
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        row = get_user_by_email(email)
+
+        if not row or not check_password_hash(row["password_hash"], password):
+            flash("Invalid email or password.")
+            return render_page("login.html")
+
+        user = User(row)
+        if not user.is_active:
+            flash("This account is inactive.")
+            return render_page("login.html")
+
+        login_user(user)
+        flash(f"Signed in as {user.email}.")
+        return redirect(next_redirect_target())
+
+    return render_page("login.html")
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        name = request.form.get("name", "")
+        email = request.form.get("email", "")
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if not email or not password:
+            flash("Email and password are required.")
+            return render_page("register.html")
+
+        if len(password) < 8:
+            flash("Password must be at least 8 characters long.")
+            return render_page("register.html")
+
+        if password != confirm_password:
+            flash("Passwords do not match.")
+            return render_page("register.html")
+
+        user, error = create_user(name, email, password)
+        if error:
+            flash(error)
+            return render_page("register.html")
+
+        login_user(user)
+        flash("Account created successfully.")
+        return redirect(url_for("index"))
+
+    return render_page("register.html")
+
+
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    flash("You're signed out for now. Let's get you back on track.")
+    return redirect(url_for("login"))
+
+
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    db = get_db()
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip() or current_user.email
+        try:
+            age = parse_optional_int(request.form.get("age"))
+            height = parse_optional_float(request.form.get("height"))
+            weight = parse_optional_float(request.form.get("weight"))
+        except ValueError:
+            db.close()
+            flash("Age, height, and weight must be valid numbers.")
+            return redirect(url_for("profile"))
+
+        db.execute(
+            """
+            UPDATE users
+            SET name = ?, age = ?, height = ?, weight = ?
+            WHERE id = ?
+            """,
+            (name, age, height, weight, current_user.id),
+        )
+        db.commit()
+        db.close()
+        flash("Personal information updated.")
+        return redirect(url_for("profile"))
+
+    user_row = db.execute("SELECT * FROM users WHERE id = ?", (current_user.id,)).fetchone()
+    db.close()
+    return render_page("profile.html", active_page="profile", profile=user_row)
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        email = request.form.get("email", "")
+        token = issue_password_reset_token(email)
+        if token:
+            reset_url = url_for("reset_password", token=token, _external=True)
+            print(f"Password reset link for {email.strip().lower()}: {reset_url}")
+
+        flash("If that email exists, a password reset link has been generated. Check the server console.")
+        return redirect(url_for("login"))
+
+    return render_page("forgot_password.html")
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+
+    token_row = get_valid_password_reset_token(token)
+    if not token_row:
+        flash("This password reset link is invalid or has expired.")
+        return redirect(url_for("forgot_password"))
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if len(password) < 8:
+            flash("Password must be at least 8 characters long.")
+            return render_page("reset_password.html", token=token)
+
+        if password != confirm_password:
+            flash("Passwords do not match.")
+            return render_page("reset_password.html", token=token)
+
+        if not consume_password_reset_token(token, password):
+            flash("This password reset link is no longer valid.")
+            return redirect(url_for("forgot_password"))
+
+        flash("Password updated successfully. Please sign in.")
+        return redirect(url_for("login"))
+
+    return render_page("reset_password.html", token=token)
+
+
 # ================= DASHBOARD =================
 @app.route("/")
+@login_required
 def index():
-    selected_date = request.args.get("date", date.today().isoformat())
+    selected_date = normalize_selected_date(request.args.get("date"))
     week = get_week_dates(selected_date)
     db = get_db()
 
-    totals = db.execute("""
-        SELECT 
-            COALESCE(SUM(calories),0) AS cal,
-            COALESCE(SUM(protein),0) AS protein,
-            COALESCE(SUM(fat),0) AS fat,
-            COALESCE(SUM(sugar),0) AS sugar
-        FROM food_log WHERE date=?
-    """, (selected_date,)).fetchone()
+    totals = db.execute(
+        """
+        SELECT
+            COALESCE(SUM(calories), 0) AS cal,
+            COALESCE(SUM(protein), 0) AS protein,
+            COALESCE(SUM(fat), 0) AS fat,
+            COALESCE(SUM(sugar), 0) AS sugar
+        FROM food_log
+        WHERE user_id = ? AND date = ?
+        """,
+        (current_user.id, selected_date),
+    ).fetchone()
 
-    gym_total = db.execute("SELECT COALESCE(SUM(calories),0) FROM gym_log WHERE date=?", (selected_date,)).fetchone()[0]
+    gym_total = db.execute(
+        "SELECT COALESCE(SUM(calories), 0) FROM gym_log WHERE user_id = ? AND date = ?",
+        (current_user.id, selected_date),
+    ).fetchone()[0]
 
     weekly_cal, weekly_sleep, weekly_wellbeing, weekly_gym = [], [], [], []
 
-    for d in week:
+    for day_value in week:
         weekly_cal.append(
-            db.execute("SELECT COALESCE(SUM(calories),0) FROM food_log WHERE date=?", (d,)).fetchone()[0]
+            db.execute(
+                "SELECT COALESCE(SUM(calories), 0) FROM food_log WHERE user_id = ? AND date = ?",
+                (current_user.id, day_value),
+            ).fetchone()[0]
         )
-        s = db.execute("SELECT hours FROM sleep_log WHERE date=?", (d,)).fetchone()
-        weekly_sleep.append(s["hours"] if s else 0)
+        sleep_row = db.execute(
+            "SELECT hours FROM sleep_log WHERE user_id = ? AND date = ?",
+            (current_user.id, day_value),
+        ).fetchone()
+        weekly_sleep.append(sleep_row["hours"] if sleep_row else 0)
         weekly_wellbeing.append(
-            db.execute("SELECT COALESCE(SUM(minutes),0) FROM wellbeing_log WHERE date=?", (d,)).fetchone()[0]
+            db.execute(
+                "SELECT COALESCE(SUM(minutes), 0) FROM wellbeing_log WHERE user_id = ? AND date = ?",
+                (current_user.id, day_value),
+            ).fetchone()[0]
         )
         weekly_gym.append(
-            db.execute("SELECT COALESCE(SUM(calories),0) FROM gym_log WHERE date=?", (d,)).fetchone()[0]
+            db.execute(
+                "SELECT COALESCE(SUM(calories), 0) FROM gym_log WHERE user_id = ? AND date = ?",
+                (current_user.id, day_value),
+            ).fetchone()[0]
         )
 
-    # Calculate daily workout duration
-    gym_duration = db.execute("SELECT COALESCE(SUM(duration),0) FROM gym_log WHERE date=?", (selected_date,)).fetchone()[0]
+    gym_duration = db.execute(
+        "SELECT COALESCE(SUM(duration), 0) FROM gym_log WHERE user_id = ? AND date = ?",
+        (current_user.id, selected_date),
+    ).fetchone()[0]
 
-    # Health Score Calculation
     score = 100
     reasons = []
-    
-    # 1. Calories (Intake vs Goal)
+
     cal_intake = totals["cal"]
     cal_goal = GOALS["calories"]
     if cal_intake > cal_goal:
         penalty = min(20, int((cal_intake - cal_goal) / 20))
         score -= penalty
-        if penalty > 5: reasons.append(("✖ Calorie limit exceeded", "bad"))
+        if penalty > 5:
+            reasons.append(("Calorie limit exceeded", "bad"))
     elif cal_intake > 0:
-        reasons.append(("✔ Calorie target healthy", "good"))
+        reasons.append(("Calorie target healthy", "good"))
 
-    # 2. Protein
     if totals["protein"] >= GOALS["protein"]:
-        reasons.append(("✔ Protein goal met", "good"))
+        reasons.append(("Protein goal met", "good"))
     else:
         score -= 10
-        reasons.append(("✖ Protein intake low", "bad"))
+        reasons.append(("Protein intake low", "bad"))
 
-    # 3. Sugar
     if totals["sugar"] > GOALS["sugar"]:
         score -= 15
-        reasons.append(("✖ Sugar limit exceeded", "bad"))
+        reasons.append(("Sugar limit exceeded", "bad"))
     else:
-        reasons.append(("✔ Sugar within limit", "good"))
+        reasons.append(("Sugar within limit", "good"))
 
-    # 4. Workout
     if gym_total > 0:
-        score += 5 # Bonus for working out
-        reasons.append(("✔ Workout completed", "good"))
+        score += 5
+        reasons.append(("Workout completed", "good"))
     else:
         score -= 5
-        reasons.append(("✖ No workout logged", "bad"))
+        reasons.append(("No workout logged", "bad"))
 
-    # 5. Sleep
-    s = db.execute("SELECT hours FROM sleep_log WHERE date=?", (selected_date,)).fetchone()
-    if s:
-        if s["hours"] >= 7:
-            reasons.append(("✔ Healthy sleep duration", "good"))
+    sleep_row = db.execute(
+        "SELECT hours FROM sleep_log WHERE user_id = ? AND date = ?",
+        (current_user.id, selected_date),
+    ).fetchone()
+    if sleep_row:
+        if sleep_row["hours"] >= 7:
+            reasons.append(("Healthy sleep duration", "good"))
         else:
             score -= 10
-            reasons.append(("✖ Short sleep duration", "bad"))
+            reasons.append(("Short sleep duration", "bad"))
     else:
         score -= 5
-        reasons.append(("✖ No sleep data", "bad"))
+        reasons.append(("No sleep data", "bad"))
 
     score = max(0, min(100, score))
 
     db.close()
 
-    return render_template(
+    return render_page(
         "index.html",
+        active_page="dashboard",
         selected_date=selected_date,
         goals=GOALS,
         total_calories=totals["cal"],
@@ -209,14 +814,17 @@ def index():
         weekly_cal=weekly_cal,
         weekly_sleep=weekly_sleep,
         weekly_wellbeing=weekly_wellbeing,
-        weekly_gym=weekly_gym
+        weekly_gym=weekly_gym,
+        max_date=date.today().isoformat(),
     )
+
 
 # ================= FOOD =================
 @app.route("/food", methods=["GET", "POST"])
+@login_required
 def food():
     db = get_db()
-    selected_date = request.args.get("date", request.form.get("date", date.today().isoformat()))
+    selected_date = normalize_selected_date(request.args.get("date", request.form.get("date")))
 
     if request.method == "POST":
         meal = request.form["meal"]
@@ -232,105 +840,146 @@ def food():
         else:
             base = FOOD_DATA[meal][food_item]
             name = food_item
-            calories, protein, fat, sugar = [x * qty for x in base]
+            calories, protein, fat, sugar = [value * qty for value in base]
 
-        db.execute("""
+        db.execute(
+            """
             INSERT INTO food_log
-            (date, meal, food, qty, calories, protein, fat, sugar)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (selected_date, meal, name, qty, calories, protein, fat, sugar))
+            (user_id, date, meal, food, qty, calories, protein, fat, sugar)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (current_user.id, selected_date, meal, name, qty, calories, protein, fat, sugar),
+        )
 
         db.commit()
         db.close()
         return redirect(url_for("food", date=selected_date))
 
     food_logs = db.execute(
-        "SELECT * FROM food_log WHERE date=? ORDER BY id DESC",
-        (selected_date,)
+        "SELECT * FROM food_log WHERE user_id = ? AND date = ? ORDER BY id DESC",
+        (current_user.id, selected_date),
     ).fetchall()
 
     db.close()
-    return render_template("food.html", food_logs=food_logs, food_data=FOOD_DATA, selected_date=selected_date)
+    return render_page(
+        "food.html",
+        active_page="food",
+        food_logs=food_logs,
+        food_data=FOOD_DATA,
+        selected_date=selected_date,
+        max_date=date.today().isoformat(),
+    )
 
-@app.route("/food/delete/<int:id>")
-def delete_food(id):
-    selected_date = request.args.get("date", date.today().isoformat())
+
+@app.route("/food/delete/<int:item_id>", methods=["POST"])
+@login_required
+def delete_food(item_id):
+    selected_date = normalize_selected_date(request.form.get("date"))
     db = get_db()
-    db.execute("DELETE FROM food_log WHERE id=?", (id,))
+    db.execute("DELETE FROM food_log WHERE id = ? AND user_id = ?", (item_id, current_user.id))
     db.commit()
     db.close()
     return redirect(url_for("food", date=selected_date))
 
-@app.route("/food/edit/<int:id>", methods=["GET", "POST"])
-def edit_food(id):
+
+@app.route("/food/edit/<int:item_id>", methods=["GET", "POST"])
+@login_required
+def edit_food(item_id):
     db = get_db()
-    food = db.execute("SELECT * FROM food_log WHERE id=?", (id,)).fetchone()
+    food_row = db.execute(
+        "SELECT * FROM food_log WHERE id = ? AND user_id = ?",
+        (item_id, current_user.id),
+    ).fetchone()
+
+    if not food_row:
+        db.close()
+        abort(404)
 
     if request.method == "POST":
-        db.execute("""
+        db.execute(
+            """
             UPDATE food_log
-            SET qty=?, calories=?, protein=?, fat=?, sugar=?
-            WHERE id=?
-        """, (
-            request.form["qty"],
-            request.form["calories"],
-            request.form["protein"],
-            request.form["fat"],
-            request.form["sugar"],
-            id
-        ))
+            SET qty = ?, calories = ?, protein = ?, fat = ?, sugar = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (
+                request.form["qty"],
+                request.form["calories"],
+                request.form["protein"],
+                request.form["fat"],
+                request.form["sugar"],
+                item_id,
+                current_user.id,
+            ),
+        )
         db.commit()
         db.close()
-        return redirect(url_for("food", date=food["date"]))
+        return redirect(url_for("food", date=food_row["date"]))
 
     db.close()
-    return render_template("edit_food.html", f=food)
+    return render_page("edit_food.html", active_page="food", f=food_row)
+
 
 # ================= SLEEP =================
 @app.route("/sleep", methods=["GET", "POST"])
+@login_required
 def sleep():
-    selected_date = request.args.get("date", date.today().isoformat())
+    selected_date = normalize_selected_date(request.args.get("date"))
     db = get_db()
 
     if request.method == "POST":
-        db.execute("""
-            INSERT INTO sleep_log (date, hours, quality, notes)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(date) DO UPDATE SET
-                hours=excluded.hours,
-                quality=excluded.quality,
-                notes=excluded.notes
-        """, (
-            request.form["date"],
-            float(request.form["hours"]),
-            int(request.form["quality"]),
-            request.form.get("notes", "")
-        ))
+        db.execute(
+            """
+            INSERT INTO sleep_log (user_id, date, hours, quality, notes)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET
+                hours = excluded.hours,
+                quality = excluded.quality,
+                notes = excluded.notes
+            """,
+            (
+                current_user.id,
+                normalize_selected_date(request.form["date"]),
+                float(request.form["hours"]),
+                int(request.form["quality"]),
+                request.form.get("notes", ""),
+            ),
+        )
         db.commit()
         db.close()
-        return redirect(url_for("sleep", date=request.form["date"]))
+        return redirect(url_for("sleep", date=normalize_selected_date(request.form["date"])))
 
     sleep_data = db.execute(
-        "SELECT * FROM sleep_log WHERE date=?",
-        (selected_date,)
+        "SELECT * FROM sleep_log WHERE user_id = ? AND date = ?",
+        (current_user.id, selected_date),
     ).fetchone()
 
     db.close()
-    return render_template("sleep.html", sleep=sleep_data, selected_date=selected_date)
+    return render_page(
+        "sleep.html",
+        active_page="sleep",
+        sleep=sleep_data,
+        selected_date=selected_date,
+        max_date=date.today().isoformat(),
+    )
 
-@app.route("/sleep/delete")
+
+@app.route("/sleep/delete", methods=["POST"])
+@login_required
 def delete_sleep():
-    selected_date = request.args.get("date", date.today().isoformat())
+    selected_date = normalize_selected_date(request.form.get("date"))
     db = get_db()
-    db.execute("DELETE FROM sleep_log WHERE date=?", (selected_date,))
+    db.execute("DELETE FROM sleep_log WHERE user_id = ? AND date = ?", (current_user.id, selected_date))
     db.commit()
     db.close()
     return redirect(url_for("sleep", date=selected_date))
 
+
 # ================= WELL-BEING =================
 @app.route("/wellbeing", methods=["GET", "POST"])
+@login_required
 def wellbeing():
-    selected_date = request.args.get("date", date.today().isoformat())
+    selected_date = normalize_selected_date(request.args.get("date"))
     db = get_db()
 
     if request.method == "POST":
@@ -338,178 +987,297 @@ def wellbeing():
         if activity == "OTHERS":
             activity = request.form.get("other_activity", "Other")
 
-        db.execute("""
-            INSERT INTO wellbeing_log (date, activity, minutes)
-            VALUES (?, ?, ?)
-        """, (
-            request.form["date"],
-            activity,
-            int(request.form["minutes"])
-        ))
+        db.execute(
+            """
+            INSERT INTO wellbeing_log (user_id, date, activity, minutes)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                current_user.id,
+                normalize_selected_date(request.form["date"]),
+                activity,
+                int(request.form["minutes"]),
+            ),
+        )
 
         db.commit()
-        return redirect(url_for("wellbeing", date=request.form["date"]))
+        db.close()
+        return redirect(url_for("wellbeing", date=normalize_selected_date(request.form["date"])))
 
-    logs = db.execute("""
+    logs = db.execute(
+        """
         SELECT * FROM wellbeing_log
-        WHERE date=?
+        WHERE user_id = ? AND date = ?
         ORDER BY id DESC
-    """, (selected_date,)).fetchall()
+        """,
+        (current_user.id, selected_date),
+    ).fetchall()
 
     db.close()
-    return render_template("wellbeing.html", wellbeing_logs=logs, selected_date=selected_date)
+    return render_page(
+        "wellbeing.html",
+        active_page="wellbeing",
+        wellbeing_logs=logs,
+        selected_date=selected_date,
+        max_date=date.today().isoformat(),
+    )
 
-@app.route("/wellbeing/delete/<int:id>")
-def delete_wellbeing(id):
-    selected_date = request.args.get("date", date.today().isoformat())
+
+@app.route("/wellbeing/delete/<int:item_id>", methods=["POST"])
+@login_required
+def delete_wellbeing(item_id):
+    selected_date = normalize_selected_date(request.form.get("date"))
     db = get_db()
-    db.execute("DELETE FROM wellbeing_log WHERE id=?", (id,))
+    db.execute("DELETE FROM wellbeing_log WHERE id = ? AND user_id = ?", (item_id, current_user.id))
     db.commit()
     db.close()
     return redirect(url_for("wellbeing", date=selected_date))
 
+
 # ================= GYM =================
 @app.route("/gym", methods=["GET", "POST"])
+@login_required
 def gym():
-    selected_date = request.args.get("date", date.today().isoformat())
+    selected_date = normalize_selected_date(request.args.get("date"))
     db = get_db()
 
     if request.method == "POST":
         intensity = request.form.get("intensity", "Medium")
-        
-        # Safely parse numeric inputs that might come in as empty strings
+        exercise = request.form.get("exercise", "")
+        is_cardio = is_cardio_exercise(exercise)
+
         try:
             sets = int(request.form.get("sets") or 0)
         except ValueError:
             sets = 0
-            
+
         try:
             reps = int(request.form.get("reps") or 0)
         except ValueError:
             reps = 0
-            
+
         try:
             weight = float(request.form.get("weight") or 0)
         except ValueError:
             weight = 0
-        
-        # New Rep-based logic
-        # Factors based on muscle group effort
+
+        try:
+            duration = float(request.form.get("duration") or 0)
+        except ValueError:
+            duration = 0
+
+        try:
+            speed = float(request.form.get("speed") or 0)
+        except ValueError:
+            speed = 0
+
+        try:
+            incline = float(request.form.get("incline") or 0)
+        except ValueError:
+            incline = 0
+
         muscle_factors = {
-            "Legs": 1.25, 
-            "Back": 1.2, 
-            "Chest": 1.1, 
-            "Shoulders": 1.0, 
-            "Arms": 0.8, 
-            "Core": 0.9
+            "Legs": 1.25,
+            "Back": 1.2,
+            "Chest": 1.1,
+            "Shoulders": 1.0,
+            "Arms": 0.8,
+            "Core": 0.9,
         }
         muscle = request.form["muscle"]
         muscle_factor = muscle_factors.get(muscle, 1.0)
-        
-        # Intensity multiplier
+
         intensity_map = {"Easy": 0.8, "Medium": 1.0, "Hard": 1.3, "Extreme": 1.6}
         intensity_val = intensity_map.get(intensity, 1.0)
 
-        # Bodyweight adjustment: treat 0kg as 50kg for calorie work estimation
-        eff_weight = weight if weight > 0 else 50
-        
-        # Formula: Work-based estimation (Reps * Sets * Weight * Constant * Factors)
-        # Constant 0.04 represents calories per kg moved in typical gym range
-        calories = (sets * reps * eff_weight * 0.04) * muscle_factor * intensity_val
+        if is_cardio:
+            profile_weight_row = db.execute(
+                "SELECT weight FROM users WHERE id = ?",
+                (current_user.id,),
+            ).fetchone()
+            body_weight = profile_weight_row["weight"] if profile_weight_row and profile_weight_row["weight"] else 70
 
-        db.execute("""
-            INSERT INTO gym_log (date, muscle, exercise, sets, reps, weight, intensity, duration, calories)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            request.form.get("date", selected_date),
-            muscle,
-            request.form.get("exercise", ""),
-            sets,
-            reps,
-            weight,
-            intensity,
-            0, # Duration removed
-            calories
-        ))
+            cardio_met = {
+                "Treadmill (Running)": 8.3,
+                "Cycling": 6.8,
+                "Elliptical": 5.0,
+                "Inclined Walking": 4.3,
+            }
+            cardio_baseline_speed = {
+                "Treadmill (Running)": 8.0,
+                "Cycling": 16.0,
+                "Elliptical": 6.0,
+                "Inclined Walking": 5.0,
+            }
+            cardio_speed_factor = {
+                "Treadmill (Running)": 0.45,
+                "Cycling": 0.2,
+                "Elliptical": 0.3,
+                "Inclined Walking": 0.25,
+            }
+
+            base_met = cardio_met.get(exercise, 5.0)
+            baseline_speed = cardio_baseline_speed.get(exercise, 6.0)
+            speed_factor = cardio_speed_factor.get(exercise, 0.25)
+            speed_boost = max(0, speed - baseline_speed) * speed_factor
+            incline_boost = max(0, incline) * 0.35 if exercise == "Inclined Walking" else 0
+            calories = ((base_met + speed_boost + incline_boost) * 3.5 * body_weight / 200) * duration
+            sets = 0
+            reps = 0
+            weight = 0
+        else:
+            duration = 0
+            speed = 0
+            incline = 0
+            eff_weight = weight if weight > 0 else 50
+            calories = (sets * reps * eff_weight * 0.04) * muscle_factor * intensity_val
+
+        db.execute(
+            """
+            INSERT INTO gym_log
+            (user_id, date, muscle, exercise, sets, reps, weight, speed, incline, intensity, duration, calories)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                current_user.id,
+                normalize_selected_date(request.form.get("date", selected_date)),
+                muscle,
+                exercise,
+                sets,
+                reps,
+                weight,
+                speed,
+                incline,
+                intensity,
+                duration,
+                calories,
+            ),
+        )
         db.commit()
-        return redirect(url_for("gym", date=request.form.get("date", selected_date)))
+        db.close()
+        return redirect(url_for("gym", date=normalize_selected_date(request.form.get("date", selected_date))))
 
-    logs = db.execute("""
+    logs = db.execute(
+        """
         SELECT * FROM gym_log
-        WHERE date=?
+        WHERE user_id = ? AND date = ?
         ORDER BY id DESC
-    """, (selected_date,)).fetchall()
-    
-    # Auto-calculate gym streak (consecutive days)
+        """,
+        (current_user.id, selected_date),
+    ).fetchall()
+
     streak = 0
-    all_dates = db.execute("SELECT DISTINCT date FROM gym_log ORDER BY date DESC").fetchall()
-    dates = [d["date"] for d in all_dates]
-    
-    current = date.today()
-    if dates and (dates[0] == current.isoformat() or dates[0] == (current - timedelta(days=1)).isoformat()):
+    all_dates = db.execute(
+        "SELECT DISTINCT date FROM gym_log WHERE user_id = ? ORDER BY date DESC",
+        (current_user.id,),
+    ).fetchall()
+    dates = [row["date"] for row in all_dates]
+
+    current_day = date.today()
+    if dates and (
+        dates[0] == current_day.isoformat()
+        or dates[0] == (current_day - timedelta(days=1)).isoformat()
+    ):
         streak = 1
         check_date = datetime.strptime(dates[0], "%Y-%m-%d").date()
-        for i in range(1, len(dates)):
-            if dates[i] == (check_date - timedelta(days=1)).isoformat():
+        for index in range(1, len(dates)):
+            if dates[index] == (check_date - timedelta(days=1)).isoformat():
                 streak += 1
                 check_date -= timedelta(days=1)
             else:
                 break
-                
-    # Get last workout for "Repeat Last"
-    last_workout = db.execute("SELECT * FROM gym_log ORDER BY id DESC LIMIT 1").fetchone()
+
+    last_workout = db.execute(
+        "SELECT * FROM gym_log WHERE user_id = ? ORDER BY id DESC LIMIT 1",
+        (current_user.id,),
+    ).fetchone()
 
     db.close()
-    return render_template("gym.html", gym_logs=logs, selected_date=selected_date, streak=streak, last_workout=last_workout)
+    return render_page(
+        "gym.html",
+        active_page="gym",
+        cardio_exercises=sorted(CARDIO_EXERCISES),
+        gym_logs=logs,
+        selected_date=selected_date,
+        streak=streak,
+        last_workout=last_workout,
+        max_date=date.today().isoformat(),
+    )
 
-@app.route("/gym/delete/<int:id>")
-def delete_gym(id):
-    selected_date = request.args.get("date", date.today().isoformat())
+
+@app.route("/gym/delete/<int:item_id>", methods=["POST"])
+@login_required
+def delete_gym(item_id):
+    selected_date = normalize_selected_date(request.form.get("date"))
     db = get_db()
-    db.execute("DELETE FROM gym_log WHERE id=?", (id,))
+    db.execute("DELETE FROM gym_log WHERE id = ? AND user_id = ?", (item_id, current_user.id))
     db.commit()
     db.close()
     return redirect(url_for("gym", date=selected_date))
 
+
 # ================= REPORT =================
 @app.route("/report")
+@login_required
 def report():
-    selected_date = request.args.get("date", date.today().isoformat())
+    selected_date = normalize_selected_date(request.args.get("date"))
     week = get_week_dates(selected_date)
     db = get_db()
 
-    meals = db.execute("""
+    meals = db.execute(
+        """
         SELECT meal,
                SUM(calories) cal,
                SUM(protein) protein,
                SUM(fat) fat,
                SUM(sugar) sugar
         FROM food_log
-        WHERE date=?
+        WHERE user_id = ? AND date = ?
         GROUP BY meal
-    """, (selected_date,)).fetchall()
+        """,
+        (current_user.id, selected_date),
+    ).fetchall()
 
     weekly_cal, weekly_sleep, weekly_wellbeing, weekly_gym = [], [], [], []
 
-    for d in week:
+    for day_value in week:
         weekly_cal.append(
-            db.execute("SELECT COALESCE(SUM(calories),0) FROM food_log WHERE date=?", (d,)).fetchone()[0]
+            db.execute(
+                "SELECT COALESCE(SUM(calories), 0) FROM food_log WHERE user_id = ? AND date = ?",
+                (current_user.id, day_value),
+            ).fetchone()[0]
         )
-        s = db.execute("SELECT hours FROM sleep_log WHERE date=?", (d,)).fetchone()
-        weekly_sleep.append(s["hours"] if s else 0)
+        sleep_row = db.execute(
+            "SELECT hours FROM sleep_log WHERE user_id = ? AND date = ?",
+            (current_user.id, day_value),
+        ).fetchone()
+        weekly_sleep.append(sleep_row["hours"] if sleep_row else 0)
         weekly_wellbeing.append(
-            db.execute("SELECT COALESCE(SUM(minutes),0) FROM wellbeing_log WHERE date=?", (d,)).fetchone()[0]
+            db.execute(
+                "SELECT COALESCE(SUM(minutes), 0) FROM wellbeing_log WHERE user_id = ? AND date = ?",
+                (current_user.id, day_value),
+            ).fetchone()[0]
         )
         weekly_gym.append(
-            db.execute("SELECT COALESCE(SUM(calories),0) FROM gym_log WHERE date=?", (d,)).fetchone()[0]
+            db.execute(
+                "SELECT COALESCE(SUM(calories), 0) FROM gym_log WHERE user_id = ? AND date = ?",
+                (current_user.id, day_value),
+            ).fetchone()[0]
         )
 
-    gym_logs = db.execute("SELECT * FROM gym_log WHERE date=?", (selected_date,)).fetchall()
-    gym_total = db.execute("SELECT COALESCE(SUM(calories),0) FROM gym_log WHERE date=?", (selected_date,)).fetchone()[0]
+    gym_logs = db.execute(
+        "SELECT * FROM gym_log WHERE user_id = ? AND date = ?",
+        (current_user.id, selected_date),
+    ).fetchall()
+    gym_total = db.execute(
+        "SELECT COALESCE(SUM(calories), 0) FROM gym_log WHERE user_id = ? AND date = ?",
+        (current_user.id, selected_date),
+    ).fetchone()[0]
 
     db.close()
-    return render_template(
+    return render_page(
         "report.html",
+        active_page="report",
         meals=meals,
         gym_logs=gym_logs,
         gym_total=gym_total,
@@ -518,10 +1286,14 @@ def report():
         weekly_cal=weekly_cal,
         weekly_sleep=weekly_sleep,
         weekly_wellbeing=weekly_wellbeing,
-        weekly_gym=weekly_gym
+        weekly_gym=weekly_gym,
+        max_date=date.today().isoformat(),
     )
+
+
+init_db()
+
 
 # ================= RUN =================
 if __name__ == "__main__":
-    init_db()
     app.run(debug=True, port=5002)
