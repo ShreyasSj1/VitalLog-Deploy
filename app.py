@@ -9,12 +9,14 @@ from flask import (
     Flask,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
     session,
     url_for,
 )
+from flask_cors import CORS
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -27,8 +29,34 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-in-production")
+app.config["JSON_SORT_KEYS"] = False
 
-DB_NAME = "fitness.db"
+IS_PRODUCTION = os.environ.get("RENDER") == "true" or os.environ.get("FLASK_ENV") == "production"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "None" if IS_PRODUCTION else "Lax"
+app.config["SESSION_COOKIE_SECURE"] = IS_PRODUCTION
+
+
+def parse_cors_origins():
+    raw_origins = os.environ.get("CORS_ORIGINS", "")
+    configured = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    if configured:
+        return configured
+
+    return [
+        r"https://.*\.vercel\.app",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    ]
+
+
+CORS(app, resources={r"/api/*": {"origins": parse_cors_origins()}}, supports_credentials=True)
+
+DB_NAME = os.environ.get("DATABASE_PATH", "fitness.db")
 
 login_manager = LoginManager()
 login_manager.login_view = "login"
@@ -114,6 +142,81 @@ FOOD_DATA = {
 }
 
 CARDIO_EXERCISES = {"Treadmill (Running)", "Cycling", "Elliptical", "Inclined Walking"}
+EXERCISE_OPTIONS = {
+    "Chest": [
+        "Bench Press (Barbell)",
+        "Bench Press (Dumbbell)",
+        "Incline Press (Barbell)",
+        "Incline Press (Dumbbell)",
+        "Chest Fly (Machine)",
+        "Chest Fly (Dumbbell)",
+        "Cable Crossover",
+        "Pushups",
+        "Dips (Chest Focus)",
+        "Peck Deck",
+    ],
+    "Back": [
+        "Deadlift",
+        "Pullups",
+        "Barbell Row",
+        "One Arm Dumbbell Row",
+        "Lat Pulldown",
+        "Seated Cable Row",
+        "T-Bar Row",
+        "Hyperextensions",
+        "Face Pulls",
+        "Straight Arm Pulldown",
+    ],
+    "Arms": [
+        "Bicep Curls (Barbell)",
+        "Bicep Curls (Dumbbell)",
+        "Hammer Curls",
+        "Preacher Curls",
+        "Tricep Pushdown (Cable)",
+        "Skull Crushers",
+        "Tricep Extension (Dumbbell)",
+        "Dips (Tricep Focus)",
+        "Concentration Curls",
+        "Overhead Extension",
+    ],
+    "Legs": [
+        "Squats (Barbell)",
+        "Leg Press",
+        "Lunges",
+        "Leg Extension",
+        "Leg Curls",
+        "Calf Raises (Standing)",
+        "Calf Raises (Seated)",
+        "Goblet Squats",
+        "Bulgarian Split Squats",
+        "Deadlift (Stiff Leg)",
+    ],
+    "Shoulders": [
+        "Overhead Press (Barbell)",
+        "Shoulder Press (Dumbbell)",
+        "Lateral Raises (Dumbbell)",
+        "Lateral Raises (Cable)",
+        "Front Raises",
+        "Reverse Fly",
+        "Arnold Press",
+        "Upright Row",
+        "Shrugs",
+        "Military Press",
+    ],
+    "Core": [
+        "Crunches",
+        "Plank",
+        "Leg Raises",
+        "Russian Twists",
+        "Ab Rollout",
+        "Mountian Climbers",
+        "Hanging Leg Raises",
+        "Treadmill (Running)",
+        "Cycling",
+        "Elliptical",
+        "Inclined Walking",
+    ],
+}
 
 
 class User(UserMixin):
@@ -506,8 +609,17 @@ def load_user(user_id):
 
 @login_manager.unauthorized_handler
 def unauthorized():
+    if request.path.startswith("/api/"):
+        return api_error("Authentication required.", 401)
     session["next_url"] = request.url
     return redirect(url_for("login"))
+
+
+@app.errorhandler(403)
+def forbidden(_error):
+    if request.path.startswith("/api/"):
+        return api_error("You do not have permission to access this resource.", 403)
+    return "Forbidden", 403
 
 
 # ================= UTIL =================
@@ -532,6 +644,257 @@ def get_week_dates(selected_date):
     d = datetime.strptime(selected_date, "%Y-%m-%d")
     start = d - timedelta(days=6)
     return [(start + timedelta(days=i)).date().isoformat() for i in range(7)]
+
+
+def get_request_data():
+    return request.get_json(silent=True) or request.form
+
+
+def row_to_dict(row):
+    return dict(row) if row else None
+
+
+def user_payload(user):
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "age": user.age,
+        "height": user.height,
+        "weight": user.weight,
+        "role": user.role,
+        "is_active": user.active,
+    }
+
+
+def api_error(message, status=400):
+    return jsonify({"ok": False, "error": message}), status
+
+
+def get_dashboard_data(user_id, selected_date):
+    week = get_week_dates(selected_date)
+    db = get_db()
+
+    totals = db.execute(
+        """
+        SELECT
+            COALESCE(SUM(calories), 0) AS cal,
+            COALESCE(SUM(protein), 0) AS protein,
+            COALESCE(SUM(fat), 0) AS fat,
+            COALESCE(SUM(sugar), 0) AS sugar
+        FROM food_log
+        WHERE user_id = ? AND date = ?
+        """,
+        (user_id, selected_date),
+    ).fetchone()
+
+    gym_total = db.execute(
+        "SELECT COALESCE(SUM(calories), 0) FROM gym_log WHERE user_id = ? AND date = ?",
+        (user_id, selected_date),
+    ).fetchone()[0]
+
+    weekly_cal, weekly_sleep, weekly_wellbeing, weekly_gym = [], [], [], []
+
+    for day_value in week:
+        weekly_cal.append(
+            db.execute(
+                "SELECT COALESCE(SUM(calories), 0) FROM food_log WHERE user_id = ? AND date = ?",
+                (user_id, day_value),
+            ).fetchone()[0]
+        )
+        sleep_row = db.execute(
+            "SELECT hours FROM sleep_log WHERE user_id = ? AND date = ?",
+            (user_id, day_value),
+        ).fetchone()
+        weekly_sleep.append(sleep_row["hours"] if sleep_row else 0)
+        weekly_wellbeing.append(
+            db.execute(
+                "SELECT COALESCE(SUM(minutes), 0) FROM wellbeing_log WHERE user_id = ? AND date = ?",
+                (user_id, day_value),
+            ).fetchone()[0]
+        )
+        weekly_gym.append(
+            db.execute(
+                "SELECT COALESCE(SUM(calories), 0) FROM gym_log WHERE user_id = ? AND date = ?",
+                (user_id, day_value),
+            ).fetchone()[0]
+        )
+
+    gym_duration = db.execute(
+        "SELECT COALESCE(SUM(duration), 0) FROM gym_log WHERE user_id = ? AND date = ?",
+        (user_id, selected_date),
+    ).fetchone()[0]
+
+    score = 100
+    reasons = []
+
+    cal_intake = totals["cal"]
+    cal_goal = GOALS["calories"]
+    if cal_intake > cal_goal:
+        penalty = min(20, int((cal_intake - cal_goal) / 20))
+        score -= penalty
+        if penalty > 5:
+            reasons.append({"message": "Calorie limit exceeded", "type": "bad"})
+    elif cal_intake > 0:
+        reasons.append({"message": "Calorie target healthy", "type": "good"})
+
+    if totals["protein"] >= GOALS["protein"]:
+        reasons.append({"message": "Protein goal met", "type": "good"})
+    else:
+        score -= 10
+        reasons.append({"message": "Protein intake low", "type": "bad"})
+
+    if totals["sugar"] > GOALS["sugar"]:
+        score -= 15
+        reasons.append({"message": "Sugar limit exceeded", "type": "bad"})
+    else:
+        reasons.append({"message": "Sugar within limit", "type": "good"})
+
+    if gym_total > 0:
+        score += 5
+        reasons.append({"message": "Workout completed", "type": "good"})
+    else:
+        score -= 5
+        reasons.append({"message": "No workout logged", "type": "bad"})
+
+    sleep_row = db.execute(
+        "SELECT hours FROM sleep_log WHERE user_id = ? AND date = ?",
+        (user_id, selected_date),
+    ).fetchone()
+    if sleep_row:
+        if sleep_row["hours"] >= 7:
+            reasons.append({"message": "Healthy sleep duration", "type": "good"})
+        else:
+            score -= 10
+            reasons.append({"message": "Short sleep duration", "type": "bad"})
+    else:
+        score -= 5
+        reasons.append({"message": "No sleep data", "type": "bad"})
+
+    score = max(0, min(100, score))
+    db.close()
+
+    return {
+        "selected_date": selected_date,
+        "max_date": date.today().isoformat(),
+        "goals": GOALS,
+        "nutrition": {
+            "calories": totals["cal"],
+            "protein": totals["protein"],
+            "fat": totals["fat"],
+            "sugar": totals["sugar"],
+        },
+        "gym": {
+            "calories": gym_total,
+            "duration": gym_duration,
+        },
+        "net_calories": totals["cal"] - gym_total,
+        "health_score": score,
+        "health_reasons": reasons,
+        "week": week,
+        "weekly": {
+            "calories": weekly_cal,
+            "sleep": weekly_sleep,
+            "wellbeing": weekly_wellbeing,
+            "gym": weekly_gym,
+        },
+    }
+
+
+def get_food_data(user_id, selected_date):
+    db = get_db()
+    food_logs = db.execute(
+        "SELECT * FROM food_log WHERE user_id = ? AND date = ? ORDER BY id DESC",
+        (user_id, selected_date),
+    ).fetchall()
+    db.close()
+    return {
+        "selected_date": selected_date,
+        "max_date": date.today().isoformat(),
+        "food_catalog": FOOD_DATA,
+        "logs": [row_to_dict(row) for row in food_logs],
+    }
+
+
+def get_sleep_data(user_id, selected_date):
+    db = get_db()
+    sleep_data = db.execute(
+        "SELECT * FROM sleep_log WHERE user_id = ? AND date = ?",
+        (user_id, selected_date),
+    ).fetchone()
+    db.close()
+    return {
+        "selected_date": selected_date,
+        "max_date": date.today().isoformat(),
+        "sleep": row_to_dict(sleep_data),
+    }
+
+
+def get_wellbeing_data(user_id, selected_date):
+    db = get_db()
+    logs = db.execute(
+        """
+        SELECT * FROM wellbeing_log
+        WHERE user_id = ? AND date = ?
+        ORDER BY id DESC
+        """,
+        (user_id, selected_date),
+    ).fetchall()
+    db.close()
+    return {
+        "selected_date": selected_date,
+        "max_date": date.today().isoformat(),
+        "logs": [row_to_dict(row) for row in logs],
+    }
+
+
+def get_gym_data(user_id, selected_date):
+    db = get_db()
+    logs = db.execute(
+        """
+        SELECT * FROM gym_log
+        WHERE user_id = ? AND date = ?
+        ORDER BY id DESC
+        """,
+        (user_id, selected_date),
+    ).fetchall()
+
+    streak = 0
+    all_dates = db.execute(
+        "SELECT DISTINCT date FROM gym_log WHERE user_id = ? ORDER BY date DESC",
+        (user_id,),
+    ).fetchall()
+    dates = [row["date"] for row in all_dates]
+
+    current_day = date.today()
+    if dates and (
+        dates[0] == current_day.isoformat()
+        or dates[0] == (current_day - timedelta(days=1)).isoformat()
+    ):
+        streak = 1
+        check_date = datetime.strptime(dates[0], "%Y-%m-%d").date()
+        for index in range(1, len(dates)):
+            if dates[index] == (check_date - timedelta(days=1)).isoformat():
+                streak += 1
+                check_date -= timedelta(days=1)
+            else:
+                break
+
+    last_workout = db.execute(
+        "SELECT * FROM gym_log WHERE user_id = ? ORDER BY id DESC LIMIT 1",
+        (user_id,),
+    ).fetchone()
+
+    db.close()
+    return {
+        "selected_date": selected_date,
+        "max_date": date.today().isoformat(),
+        "cardio_exercises": sorted(CARDIO_EXERCISES),
+        "exercise_options": EXERCISE_OPTIONS,
+        "logs": [row_to_dict(row) for row in logs],
+        "streak": streak,
+        "last_workout": row_to_dict(last_workout),
+    }
 
 
 # ================= AUTH =================
@@ -686,6 +1049,429 @@ def reset_password(token):
         return redirect(url_for("login"))
 
     return render_page("reset_password.html", token=token)
+
+
+# ================= API =================
+@app.route("/api/health")
+def api_health():
+    return jsonify(
+        {
+            "ok": True,
+            "status": "healthy",
+            "service": "fitness-backend",
+            "timestamp": utc_iso(now_utc()),
+        }
+    )
+
+
+@app.route("/api/meta")
+def api_meta():
+    return jsonify(
+        {
+            "ok": True,
+            "food_catalog": FOOD_DATA,
+            "exercise_options": EXERCISE_OPTIONS,
+            "cardio_exercises": sorted(CARDIO_EXERCISES),
+            "goals": GOALS,
+        }
+    )
+
+
+@app.route("/api/session")
+def api_session():
+    return jsonify(
+        {
+            "ok": True,
+            "authenticated": current_user.is_authenticated,
+            "user": user_payload(current_user) if current_user.is_authenticated else None,
+        }
+    )
+
+
+@app.route("/api/register", methods=["POST"])
+def api_register():
+    if current_user.is_authenticated:
+        return jsonify({"ok": True, "user": user_payload(current_user)})
+
+    data = get_request_data()
+    name = data.get("name", "")
+    email = data.get("email", "")
+    password = data.get("password", "")
+    confirm_password = data.get("confirm_password", "")
+
+    if not email or not password:
+        return api_error("Email and password are required.")
+    if len(password) < 8:
+        return api_error("Password must be at least 8 characters long.")
+    if password != confirm_password:
+        return api_error("Passwords do not match.")
+
+    user, error = create_user(name, email, password)
+    if error:
+        return api_error(error, 409)
+
+    login_user(user)
+    return jsonify({"ok": True, "user": user_payload(user)}), 201
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    if current_user.is_authenticated:
+        return jsonify({"ok": True, "user": user_payload(current_user)})
+
+    data = get_request_data()
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "")
+    row = get_user_by_email(email)
+
+    if not row or not check_password_hash(row["password_hash"], password):
+        return api_error("Invalid email or password.", 401)
+
+    user = User(row)
+    if not user.is_active:
+        return api_error("This account is inactive.", 403)
+
+    login_user(user)
+    return jsonify({"ok": True, "user": user_payload(user)})
+
+
+@app.route("/api/logout", methods=["POST"])
+@login_required
+def api_logout():
+    logout_user()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/profile", methods=["GET", "PUT"])
+@login_required
+def api_profile():
+    if request.method == "GET":
+        db = get_db()
+        row = db.execute("SELECT * FROM users WHERE id = ?", (current_user.id,)).fetchone()
+        db.close()
+        return jsonify({"ok": True, "profile": row_to_dict(row)})
+
+    data = get_request_data()
+    name = data.get("name", "").strip() or current_user.email
+    try:
+        age = parse_optional_int(data.get("age"))
+        height = parse_optional_float(data.get("height"))
+        weight = parse_optional_float(data.get("weight"))
+    except ValueError:
+        return api_error("Age, height, and weight must be valid numbers.")
+
+    db = get_db()
+    db.execute(
+        """
+        UPDATE users
+        SET name = ?, age = ?, height = ?, weight = ?
+        WHERE id = ?
+        """,
+        (name, age, height, weight, current_user.id),
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM users WHERE id = ?", (current_user.id,)).fetchone()
+    db.close()
+    return jsonify({"ok": True, "profile": row_to_dict(row)})
+
+
+@app.route("/api/dashboard")
+@login_required
+def api_dashboard():
+    selected_date = normalize_selected_date(request.args.get("date"))
+    return jsonify({"ok": True, **get_dashboard_data(current_user.id, selected_date)})
+
+
+@app.route("/api/nutrition", methods=["GET", "POST"])
+@login_required
+def api_nutrition():
+    if request.method == "GET":
+        selected_date = normalize_selected_date(request.args.get("date"))
+        return jsonify({"ok": True, **get_food_data(current_user.id, selected_date)})
+
+    data = get_request_data()
+    selected_date = normalize_selected_date(data.get("date"))
+    meal = data.get("meal")
+    food_item = data.get("food")
+
+    if meal not in FOOD_DATA:
+        return api_error("Select a valid meal.")
+    if not food_item:
+        return api_error("Select a food item.")
+
+    try:
+        qty = float(data.get("qty", 1))
+    except (TypeError, ValueError):
+        return api_error("Quantity must be a valid number.")
+
+    if qty <= 0:
+        return api_error("Quantity must be greater than zero.")
+
+    if food_item == "OTHERS":
+        name = data.get("other_name", "").strip()
+        if not name:
+            return api_error("Food name is required for custom nutrition entries.")
+        try:
+            calories = float(data.get("other_calories", 0)) * qty
+            protein = float(data.get("other_protein", 0)) * qty
+            fat = float(data.get("other_fat", 0)) * qty
+            sugar = float(data.get("other_sugar", 0)) * qty
+        except (TypeError, ValueError):
+            return api_error("Custom nutrition values must be valid numbers.")
+    else:
+        if food_item not in FOOD_DATA[meal]:
+            return api_error("Select a valid food item.")
+        name = food_item
+        calories, protein, fat, sugar = [value * qty for value in FOOD_DATA[meal][food_item]]
+
+    db = get_db()
+    cursor = db.execute(
+        """
+        INSERT INTO food_log
+        (user_id, date, meal, food, qty, calories, protein, fat, sugar)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (current_user.id, selected_date, meal, name, qty, calories, protein, fat, sugar),
+    )
+    row = db.execute("SELECT * FROM food_log WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    db.commit()
+    db.close()
+    return jsonify({"ok": True, "item": row_to_dict(row)}), 201
+
+
+@app.route("/api/nutrition/<int:item_id>", methods=["DELETE"])
+@login_required
+def api_delete_nutrition(item_id):
+    db = get_db()
+    cursor = db.execute("DELETE FROM food_log WHERE id = ? AND user_id = ?", (item_id, current_user.id))
+    db.commit()
+    db.close()
+    if cursor.rowcount == 0:
+        return api_error("Food log entry not found.", 404)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/sleep", methods=["GET", "POST", "DELETE"])
+@login_required
+def api_sleep():
+    if request.method == "GET":
+        selected_date = normalize_selected_date(request.args.get("date"))
+        return jsonify({"ok": True, **get_sleep_data(current_user.id, selected_date)})
+
+    data = get_request_data()
+    selected_date = normalize_selected_date(data.get("date"))
+
+    if request.method == "DELETE":
+        db = get_db()
+        db.execute(
+            "DELETE FROM sleep_log WHERE user_id = ? AND date = ?",
+            (current_user.id, selected_date),
+        )
+        db.commit()
+        db.close()
+        return jsonify({"ok": True})
+
+    try:
+        hours = float(data.get("hours"))
+        quality = int(data.get("quality"))
+    except (TypeError, ValueError):
+        return api_error("Sleep hours and quality must be valid numbers.")
+
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO sleep_log (user_id, date, hours, quality, notes)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, date) DO UPDATE SET
+            hours = excluded.hours,
+            quality = excluded.quality,
+            notes = excluded.notes
+        """,
+        (
+            current_user.id,
+            selected_date,
+            hours,
+            quality,
+            data.get("notes", ""),
+        ),
+    )
+    db.commit()
+    sleep_data = db.execute(
+        "SELECT * FROM sleep_log WHERE user_id = ? AND date = ?",
+        (current_user.id, selected_date),
+    ).fetchone()
+    db.close()
+    return jsonify({"ok": True, "sleep": row_to_dict(sleep_data)})
+
+
+@app.route("/api/wellbeing", methods=["GET", "POST"])
+@login_required
+def api_wellbeing():
+    if request.method == "GET":
+        selected_date = normalize_selected_date(request.args.get("date"))
+        return jsonify({"ok": True, **get_wellbeing_data(current_user.id, selected_date)})
+
+    data = get_request_data()
+    activity = data.get("activity", "")
+    if activity == "OTHERS":
+        activity = data.get("other_activity", "Other")
+
+    try:
+        minutes = int(data.get("minutes"))
+    except (TypeError, ValueError):
+        return api_error("Minutes must be a valid number.")
+
+    selected_date = normalize_selected_date(data.get("date"))
+    db = get_db()
+    cursor = db.execute(
+        """
+        INSERT INTO wellbeing_log (user_id, date, activity, minutes)
+        VALUES (?, ?, ?, ?)
+        """,
+        (current_user.id, selected_date, activity, minutes),
+    )
+    row = db.execute("SELECT * FROM wellbeing_log WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    db.commit()
+    db.close()
+    return jsonify({"ok": True, "item": row_to_dict(row)}), 201
+
+
+@app.route("/api/wellbeing/<int:item_id>", methods=["DELETE"])
+@login_required
+def api_delete_wellbeing(item_id):
+    db = get_db()
+    cursor = db.execute(
+        "DELETE FROM wellbeing_log WHERE id = ? AND user_id = ?",
+        (item_id, current_user.id),
+    )
+    db.commit()
+    db.close()
+    if cursor.rowcount == 0:
+        return api_error("Wellbeing entry not found.", 404)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/workout", methods=["GET", "POST"])
+@login_required
+def api_workout():
+    if request.method == "GET":
+        selected_date = normalize_selected_date(request.args.get("date"))
+        return jsonify({"ok": True, **get_gym_data(current_user.id, selected_date)})
+
+    data = get_request_data()
+    selected_date = normalize_selected_date(data.get("date"))
+    intensity = data.get("intensity", "Medium")
+    exercise = data.get("exercise", "")
+    muscle = data.get("muscle", "")
+    is_cardio = is_cardio_exercise(exercise)
+
+    if muscle not in EXERCISE_OPTIONS:
+        return api_error("Select a valid muscle group.")
+    if exercise not in EXERCISE_OPTIONS[muscle]:
+        return api_error("Select a valid exercise for this muscle group.")
+
+    try:
+        sets = int(data.get("sets") or 0)
+        reps = int(data.get("reps") or 0)
+        weight = float(data.get("weight") or 0)
+        duration = float(data.get("duration") or 0)
+        speed = float(data.get("speed") or 0)
+        incline = float(data.get("incline") or 0)
+    except (TypeError, ValueError):
+        return api_error("Workout values must be valid numbers.")
+
+    muscle_factors = {
+        "Legs": 1.25,
+        "Back": 1.2,
+        "Chest": 1.1,
+        "Shoulders": 1.0,
+        "Arms": 0.8,
+        "Core": 0.9,
+    }
+    muscle_factor = muscle_factors.get(muscle, 1.0)
+    intensity_map = {"Easy": 0.8, "Medium": 1.0, "Hard": 1.3, "Extreme": 1.6}
+    intensity_val = intensity_map.get(intensity, 1.0)
+
+    db = get_db()
+    if is_cardio:
+        profile_weight_row = db.execute(
+            "SELECT weight FROM users WHERE id = ?",
+            (current_user.id,),
+        ).fetchone()
+        body_weight = profile_weight_row["weight"] if profile_weight_row and profile_weight_row["weight"] else 70
+
+        cardio_met = {
+            "Treadmill (Running)": 8.3,
+            "Cycling": 6.8,
+            "Elliptical": 5.0,
+            "Inclined Walking": 4.3,
+        }
+        cardio_baseline_speed = {
+            "Treadmill (Running)": 8.0,
+            "Cycling": 16.0,
+            "Elliptical": 6.0,
+            "Inclined Walking": 5.0,
+        }
+        cardio_speed_factor = {
+            "Treadmill (Running)": 0.45,
+            "Cycling": 0.2,
+            "Elliptical": 0.3,
+            "Inclined Walking": 0.25,
+        }
+
+        base_met = cardio_met.get(exercise, 5.0)
+        baseline_speed = cardio_baseline_speed.get(exercise, 6.0)
+        speed_factor = cardio_speed_factor.get(exercise, 0.25)
+        speed_boost = max(0, speed - baseline_speed) * speed_factor
+        incline_boost = max(0, incline) * 0.35 if exercise == "Inclined Walking" else 0
+        calories = ((base_met + speed_boost + incline_boost) * 3.5 * body_weight / 200) * duration
+        sets = 0
+        reps = 0
+        weight = 0
+    else:
+        duration = 0
+        speed = 0
+        incline = 0
+        eff_weight = weight if weight > 0 else 50
+        calories = (sets * reps * eff_weight * 0.04) * muscle_factor * intensity_val
+
+    cursor = db.execute(
+        """
+        INSERT INTO gym_log
+        (user_id, date, muscle, exercise, sets, reps, weight, speed, incline, intensity, duration, calories)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            current_user.id,
+            selected_date,
+            muscle,
+            exercise,
+            sets,
+            reps,
+            weight,
+            speed,
+            incline,
+            intensity,
+            duration,
+            calories,
+        ),
+    )
+    row = db.execute("SELECT * FROM gym_log WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    db.commit()
+    db.close()
+    return jsonify({"ok": True, "item": row_to_dict(row)}), 201
+
+
+@app.route("/api/workout/<int:item_id>", methods=["DELETE"])
+@login_required
+def api_delete_workout(item_id):
+    db = get_db()
+    cursor = db.execute("DELETE FROM gym_log WHERE id = ? AND user_id = ?", (item_id, current_user.id))
+    db.commit()
+    db.close()
+    if cursor.rowcount == 0:
+        return api_error("Workout entry not found.", 404)
+    return jsonify({"ok": True})
 
 
 # ================= DASHBOARD =================
@@ -1296,4 +2082,5 @@ init_db()
 
 # ================= RUN =================
 if __name__ == "__main__":
-    app.run(debug=True, port=5002)
+    port = int(os.environ.get("PORT", 5002))
+    app.run(host="0.0.0.0", port=port, debug=not IS_PRODUCTION)

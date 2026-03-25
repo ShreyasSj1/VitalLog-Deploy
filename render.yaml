@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: fitness-web-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.2
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_PATH
+        value: fitness.db
+      - key: CORS_ORIGINS
+        sync: false
