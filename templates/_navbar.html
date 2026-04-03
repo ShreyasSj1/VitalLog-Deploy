@@ -8,6 +8,11 @@
                 <span>{{ current_user.email }}</span>
             </div>
         </a>
+        {% else %}
+        <div class="nav-auth-mobile">
+            <a href="{{ url_for('login') }}" class="secondary-btn nav-auth-link">Sign In</a>
+            <a href="{{ url_for('register') }}" class="primary-btn nav-auth-link">Create Account</a>
+        </div>
         {% endif %}
         <a href="{{ url_for('index') }}" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
         <a href="{{ url_for('food') }}" class="{{ 'active' if active_page == 'food' else '' }}">Food</a>
@@ -19,13 +24,18 @@
 
     <div class="nav-right">
         {% if current_user.is_authenticated %}
-        <a href="{{ url_for('profile') }}" class="nav-user nav-user-link">
+        <a href="{{ url_for('profile') }}" class="nav-user nav-user-desktop nav-user-link">
             <div class="nav-avatar nav-avatar-fallback">{{ current_user.name[:1] | upper }}</div>
             <div class="nav-user-meta">
                 <strong>{{ current_user.name }}</strong>
                 <span>{{ current_user.role|title }}</span>
             </div>
         </a>
+        {% else %}
+        <div class="nav-auth-desktop">
+            <a href="{{ url_for('login') }}" class="secondary-btn nav-auth-link">Sign In</a>
+            <a href="{{ url_for('register') }}" class="primary-btn nav-auth-link">Create Account</a>
+        </div>
         {% endif %}
 
         <button id="themeToggle" class="theme-btn">Dark</button>
@@ -47,5 +57,61 @@ if (!window.__desktopScrollValueLock) {
 
         event.preventDefault();
     }, { passive: false });
+}
+
+if (!window.__sharedNavControls) {
+    window.__sharedNavControls = true;
+
+    const body = document.body;
+    const toggleBtn = document.getElementById("themeToggle");
+    const menuToggle = document.getElementById("menuToggle");
+    const navMenu = document.getElementById("navMenu");
+    const desktopNavQuery = window.matchMedia("(min-width: 769px)");
+
+    function syncThemeButton() {
+        if (!toggleBtn) return;
+        const isDark = body.classList.contains("dark");
+        toggleBtn.innerText = isDark ? "☀️ Light" : "🌙 Dark";
+    }
+
+    function syncMenuButton() {
+        if (!menuToggle || !navMenu) return;
+        const isOpen = navMenu.classList.contains("active");
+        menuToggle.innerText = isOpen ? "✕" : "☰";
+        menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        menuToggle.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
+    }
+
+    if (localStorage.getItem("theme") === "dark") {
+        body.classList.add("dark");
+    }
+    syncThemeButton();
+    syncMenuButton();
+
+    toggleBtn?.addEventListener("click", () => {
+        body.classList.toggle("dark");
+        localStorage.setItem("theme", body.classList.contains("dark") ? "dark" : "light");
+        syncThemeButton();
+    });
+
+    menuToggle?.addEventListener("click", () => {
+        navMenu?.classList.toggle("active");
+        syncMenuButton();
+    });
+
+    document.addEventListener("click", (event) => {
+        if (!navMenu || !menuToggle) return;
+        if (!navMenu.contains(event.target) && !menuToggle.contains(event.target)) {
+            navMenu.classList.remove("active");
+            syncMenuButton();
+        }
+    });
+
+    desktopNavQuery.addEventListener("change", (event) => {
+        if (event.matches && navMenu) {
+            navMenu.classList.remove("active");
+            syncMenuButton();
+        }
+    });
 }
 </script>

@@ -170,48 +170,5 @@ foodSelect.addEventListener("change", () => {
 });
 </script>
 
-<script>
-/* --------- DARK MODE ---------- */
-const toggleBtn = document.getElementById("themeToggle");
-
-if (localStorage.getItem("theme") === "dark") {
-    document.body.classList.add("dark");
-    toggleBtn.innerText = "☀️ Light";
-}
-
-toggleBtn.addEventListener("click", () => {
-    document.body.classList.toggle("dark");
-    const isDark = document.body.classList.contains("dark");
-    localStorage.setItem("theme", isDark ? "dark" : "light");
-    toggleBtn.innerText = isDark ? "☀️ Light" : "🌙 Dark";
-});
-</script>
-
-<script>
-const menuToggleElement = document.getElementById("menuToggle");
-const navMenuElement = document.getElementById("navMenu");
-
-function syncMenuButton() {
-    const isOpen = navMenuElement.classList.contains("active");
-    menuToggleElement.innerText = isOpen ? "✕" : "☰";
-    menuToggleElement.setAttribute("aria-expanded", isOpen ? "true" : "false");
-    menuToggleElement.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
-}
-
-menuToggleElement.addEventListener("click", () => {
-    navMenuElement.classList.toggle("active");
-    syncMenuButton();
-});
-
-document.addEventListener("click", (e) => {
-    if (!navMenuElement.contains(e.target) && !menuToggleElement.contains(e.target)) {
-        navMenuElement.classList.remove("active");
-        syncMenuButton();
-    }
-});
-
-syncMenuButton();
-</script>
-
 </body>
 </html>

@@ -1,4 +1,4 @@
 Flask
 Flask-Login
-Flask-Cors
+psycopg[binary]
 gunicorn

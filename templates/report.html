@@ -140,9 +140,13 @@
 
 <!-- ================= CHART SCRIPTS ================= -->
 <script>
-// Standardize labels to MM-DD
 const rawLabels = {{ week | tojson }};
-const labels = rawLabels.map(l => l.length > 5 ? l.substring(5) : l);
+const isCompactViewport = window.matchMedia('(max-width: 640px)').matches;
+const labels = rawLabels.map((label) => {
+    if (label.length <= 5) return label;
+    const shortLabel = label.substring(5);
+    return isCompactViewport ? shortLabel.substring(3) : shortLabel;
+});
 
 // Set global chart defaults
 Chart.defaults.font.family = "'Outfit', sans-serif";
@@ -151,22 +155,42 @@ Chart.defaults.color = "#94a3b8";
 const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    layout: {
+        padding: isCompactViewport
+            ? { top: 6, right: 4, bottom: 0, left: 0 }
+            : { top: 10, right: 8, bottom: 4, left: 4 }
+    },
     plugins: {
-        legend: { display: false }
+        legend: { display: false },
+        tooltip: {
+            callbacks: {
+                title(items) {
+                    const index = items[0]?.dataIndex ?? 0;
+                    return rawLabels[index];
+                }
+            }
+        }
     },
     scales: {
         y: {
             beginAtZero: true,
             min: 0,
+            grace: '8%',
+            ticks: {
+                maxTicksLimit: isCompactViewport ? 5 : 7,
+                padding: isCompactViewport ? 6 : 8,
+                font: { size: isCompactViewport ? 10 : 11 }
+            },
             grid: { color: 'rgba(148, 163, 184, 0.1)' }
         },
         x: {
+            offset: false,
             ticks: {
                 maxRotation: 0,
                 minRotation: 0,
-                autoSkip: true,
-                maxTicksLimit: 7,
-                font: { size: 10 }
+                autoSkip: false,
+                padding: isCompactViewport ? 6 : 10,
+                font: { size: isCompactViewport ? 9 : 11 }
             },
             grid: { display: false }
         }
@@ -182,7 +206,10 @@ new Chart(document.getElementById("calorieChart"), {
             label: "Calories",
             data: {{ weekly_cal | tojson }},
             backgroundColor: "#a855f7",
-            borderRadius: 6
+            borderRadius: 8,
+            barPercentage: isCompactViewport ? 0.64 : 0.72,
+            categoryPercentage: isCompactViewport ? 0.9 : 0.8,
+            maxBarThickness: isCompactViewport ? 22 : 30
         }]
     },
     options: commonOptions
@@ -200,6 +227,8 @@ new Chart(document.getElementById("sleepChart"), {
             backgroundColor: "rgba(16, 185, 129, 0.1)",
             borderWidth: 3,
             tension: 0.4,
+            pointRadius: isCompactViewport ? 2.5 : 3.5,
+            pointHoverRadius: isCompactViewport ? 3.5 : 4.5,
             fill: true,
             spanGaps: true
         }]
@@ -228,6 +257,8 @@ new Chart(document.getElementById("wellbeingChart"), {
             backgroundColor: "rgba(245, 158, 11, 0.1)",
             borderWidth: 3,
             tension: 0.4,
+            pointRadius: isCompactViewport ? 2.5 : 3.5,
+            pointHoverRadius: isCompactViewport ? 3.5 : 4.5,
             fill: true,
             spanGaps: true
         }]
@@ -244,55 +275,14 @@ new Chart(document.getElementById("gymBurnChart"), {
             label: "Gym Burn (kcal)",
             data: {{ weekly_gym | tojson }},
             backgroundColor: "#ef4444",
-            borderRadius: 6
+            borderRadius: 8,
+            barPercentage: isCompactViewport ? 0.64 : 0.72,
+            categoryPercentage: isCompactViewport ? 0.9 : 0.8,
+            maxBarThickness: isCompactViewport ? 22 : 30
         }]
     },
     options: commonOptions
 });
-</script>
-
-<!-- ================= DARK MODE (SINGLE SOURCE OF TRUTH) ================= -->
-<script>
-const toggleBtn = document.getElementById("themeToggle");
-
-// Load saved theme
-if (localStorage.getItem("theme") === "dark") {
-    document.body.classList.add("dark");
-    toggleBtn.innerText = "☀️ Light";
-}
-
-toggleBtn.addEventListener("click", () => {
-    document.body.classList.toggle("dark");
-    const isDark = document.body.classList.contains("dark");
-    localStorage.setItem("theme", isDark ? "dark" : "light");
-    toggleBtn.innerText = isDark ? "☀️ Light" : "🌙 Dark";
-});
-</script>
-
-<script>
-const menuToggleElement = document.getElementById("menuToggle");
-const navMenuElement = document.getElementById("navMenu");
-
-function syncMenuButton() {
-    const isOpen = navMenuElement.classList.contains("active");
-    menuToggleElement.innerText = isOpen ? "✕" : "☰";
-    menuToggleElement.setAttribute("aria-expanded", isOpen ? "true" : "false");
-    menuToggleElement.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
-}
-
-menuToggleElement.addEventListener("click", () => {
-    navMenuElement.classList.toggle("active");
-    syncMenuButton();
-});
-
-document.addEventListener("click", (e) => {
-    if (!navMenuElement.contains(e.target) && !menuToggleElement.contains(e.target)) {
-        navMenuElement.classList.remove("active");
-        syncMenuButton();
-    }
-});
-
-syncMenuButton();
 </script>
 
 </body>
