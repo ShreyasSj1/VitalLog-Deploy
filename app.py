@@ -769,6 +769,12 @@ def reset_password(token):
     return render_page("reset_password.html", token=token)
 
 
+# ================= HEALTH =================
+@app.route("/health")
+def health():
+    return {"ok": True, "status": "healthy"}, 200
+
+
 # ================= DASHBOARD =================
 @app.route("/")
 @login_required
