@@ -79,6 +79,32 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
 
+        function showError(msg) {
+            let stack = document.querySelector('.flash-stack');
+            if (!stack) {
+                stack = document.createElement('div');
+                stack.className = 'flash-stack';
+                const copy = document.querySelector('.login-copy');
+                copy.parentNode.insertBefore(stack, copy.nextSibling);
+            }
+            
+            // Map Firebase errors to human friendly messages
+            let friendlyMsg = msg;
+            if (msg.includes('email-already-in-use')) {
+                friendlyMsg = "That email is already registered. Try signing in instead.";
+            } else if (msg.includes('invalid-email')) {
+                friendlyMsg = "Please enter a valid email address.";
+            } else if (msg.includes('weak-password')) {
+                friendlyMsg = "Password is too weak. Please use at least 6 characters.";
+            } else if (msg.includes('popup-closed-by-user')) {
+                friendlyMsg = "Google sign in was cancelled.";
+            } else if (msg.includes('network-request-failed')) {
+                friendlyMsg = "Network error. Please check your connection.";
+            }
+            
+            stack.innerHTML = `<div class="flash-message">${friendlyMsg}</div>`;
+        }
+
         const form = document.getElementById('register-form');
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -89,7 +115,7 @@
             const btn = form.querySelector('button[type="submit"]');
 
             if (password !== confirm_password) {
-                alert("Passwords do not match!");
+                showError("Passwords do not match!");
                 return;
             }
             
@@ -109,12 +135,12 @@
                     window.location.href = "{{ url_for('index') }}";
                 } else {
                     const data = await response.json();
-                    alert("Server error: " + data.error);
+                    showError("Server error: " + data.error);
                     btn.disabled = false;
                     btn.textContent = "Create New Identity";
                 }
             } catch (error) {
-                alert(error.message);
+                showError(error.message);
                 btn.disabled = false;
                 btn.textContent = "Create New Identity";
             }
@@ -145,13 +171,13 @@
                     window.location.href = "{{ url_for('index') }}";
                 } else {
                     const data = await response.json();
-                    alert("Server error: " + data.error);
+                    showError("Server error: " + data.error);
                     googleBtn.disabled = false;
                     googleBtn.innerHTML = originalText;
                 }
             } catch (error) {
                 if (error.code !== 'auth/popup-closed-by-user') {
-                    alert(error.message);
+                    showError(error.message);
                 }
                 googleBtn.disabled = false;
                 googleBtn.innerHTML = originalText;
