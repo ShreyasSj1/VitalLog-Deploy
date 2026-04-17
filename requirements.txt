@@ -3,3 +3,4 @@ Flask-Login
 psycopg[binary]
 gunicorn
 groq
+firebase-admin

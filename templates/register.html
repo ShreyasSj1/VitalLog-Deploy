@@ -20,7 +20,7 @@
 
             {% include "_flash_messages.html" %}
 
-            <form method="post" class="auth-form">
+            <form id="register-form" class="auth-form">
                 <div class="form-row">
                     <label>Name</label>
                     <input type="text" name="name" autocomplete="name">
@@ -54,6 +54,61 @@
     if (localStorage.getItem("theme") === "dark") {
         document.body.classList.add("dark");
     }
+    </script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "{{ firebase_api_key }}",
+            authDomain: "{{ firebase_auth_domain }}",
+            projectId: "{{ firebase_project_id }}"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        const form = document.getElementById('register-form');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = form.name.value;
+            const email = form.email.value;
+            const password = form.password.value;
+            const confirm_password = form.confirm_password.value;
+            const btn = form.querySelector('button[type="submit"]');
+
+            if (password !== confirm_password) {
+                alert("Passwords do not match!");
+                return;
+            }
+            
+            try {
+                btn.disabled = true;
+                btn.textContent = "Creating Identity...";
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const idToken = await userCredential.user.getIdToken();
+                
+                const response = await fetch('/api/auth/firebase', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idToken: idToken, name: name })
+                });
+                
+                if (response.ok) {
+                    window.location.href = "{{ url_for('index') }}";
+                } else {
+                    const data = await response.json();
+                    alert("Server error: " + data.error);
+                    btn.disabled = false;
+                    btn.textContent = "Create New Identity";
+                }
+            } catch (error) {
+                alert(error.message);
+                btn.disabled = false;
+                btn.textContent = "Create New Identity";
+            }
+        });
     </script>
 </body>
 </html>

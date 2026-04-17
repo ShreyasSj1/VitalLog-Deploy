@@ -18,6 +18,10 @@ from flask import (
     jsonify,
 )
 import groq
+import json
+import base64
+import firebase_admin
+from firebase_admin import credentials, auth as firebase_auth
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -44,6 +48,29 @@ DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DEFAULT_SQLITE_PATH}"
 login_manager = LoginManager()
 login_manager.login_view = "login"
 login_manager.init_app(app)
+
+@app.context_processor
+def inject_firebase_config():
+    return dict(
+        firebase_api_key=os.environ.get("FIREBASE_API_KEY", ""),
+        firebase_auth_domain=os.environ.get("FIREBASE_AUTH_DOMAIN", ""),
+        firebase_project_id=os.environ.get("FIREBASE_PROJECT_ID", "")
+    )
+
+# ================= FIREBASE ADMIN =================
+firebase_credentials = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
+if firebase_credentials:
+    cred_json = base64.b64decode(firebase_credentials).decode("utf-8")
+    cred = credentials.Certificate(json.loads(cred_json))
+    firebase_admin.initialize_app(cred)
+elif os.path.exists("firebase-adminsdk.json"):
+    cred = credentials.Certificate("firebase-adminsdk.json")
+    firebase_admin.initialize_app(cred)
+else:
+    try:
+        firebase_admin.initialize_app()
+    except ValueError:
+        pass
 
 # ================= GROQ AI =================
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -637,68 +664,75 @@ def get_week_dates(selected_date):
 
 
 # ================= AUTH =================
-@app.route("/login", methods=["GET", "POST"])
+@app.route("/api/auth/firebase", methods=["POST"])
+def auth_firebase():
+    data = request.json
+    id_token = data.get("idToken")
+    name = data.get("name", "")
+    
+    if not id_token:
+        return jsonify({"error": "No token provided"}), 400
+        
+    try:
+        decoded_token = firebase_auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        email = decoded_token.get('email', '').strip().lower()
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        # Look up user or create them
+        user_row = get_user_by_email(email)
+        if not user_row:
+            # Create user (bypass normal create_user password flow)
+            db = get_db()
+            role = default_role_for_email(db, email)
+            # Use 'firebase_managed' as password hash
+            params = (email, 'firebase_managed', name or email, role)
+            
+            if DB_ENGINE == "postgres":
+                user_id = db.execute(
+                    "INSERT INTO users (email, password_hash, name, role, is_active) VALUES (%s, %s, %s, %s, 1) RETURNING id",
+                    params,
+                ).fetchone()["id"]
+            else:
+                cursor = db.execute(
+                    "INSERT INTO users (email, password_hash, name, role, is_active) VALUES (?, ?, ?, ?, 1)",
+                    params,
+                )
+                user_id = cursor.lastrowid
+                
+            claim_legacy_rows(db, user_id)
+            db.commit()
+            user_row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            db.close()
+            
+        user = User(user_row)
+        if not user.is_active:
+            return jsonify({"error": "Account inactive"}), 403
+            
+        login_user(user)
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        print(f"Firebase auth error: {e}")
+        return jsonify({"error": "Invalid token"}), 401
+
+
+@app.route("/login", methods=["GET"])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
-
-    if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
-        row = get_user_by_email(email)
-
-        if not row or not check_password_hash(row["password_hash"], password):
-            flash("Invalid email or password.")
-            return render_page("login.html")
-
-        user = User(row)
-        if not user.is_active:
-            flash("This account is inactive.")
-            return render_page("login.html")
-
-        login_user(user)
-        flash(f"Signed in as {user.email}.")
-        return redirect(next_redirect_target())
-
     return render_page("login.html")
 
 
-@app.route("/register", methods=["GET", "POST"])
+@app.route("/register", methods=["GET"])
 def register():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
-
-    if request.method == "POST":
-        name = request.form.get("name", "")
-        email = request.form.get("email", "")
-        password = request.form.get("password", "")
-        confirm_password = request.form.get("confirm_password", "")
-
-        if not email or not password:
-            flash("Email and password are required.")
-            return render_page("register.html")
-
-        if len(password) < 8:
-            flash("Password must be at least 8 characters long.")
-            return render_page("register.html")
-
-        if password != confirm_password:
-            flash("Passwords do not match.")
-            return render_page("register.html")
-
-        user, error = create_user(name, email, password)
-        if error:
-            flash(error)
-            return render_page("register.html")
-
-        login_user(user)
-        flash("Account created successfully.")
-        return redirect(url_for("index"))
-
     return render_page("register.html")
 
 
-@app.route("/logout", methods=["POST"])
+@app.route("/logout", methods=["POST", "GET"])
 @login_required
 def logout():
     logout_user()
@@ -740,54 +774,17 @@ def profile():
     return render_page("profile.html", active_page="profile", profile=user_row)
 
 
-@app.route("/forgot-password", methods=["GET", "POST"])
+@app.route("/forgot-password", methods=["GET"])
 def forgot_password():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
-
-    if request.method == "POST":
-        email = request.form.get("email", "")
-        token = issue_password_reset_token(email)
-        if token:
-            reset_url = url_for("reset_password", token=token, _external=True)
-            print(f"Password reset link for {email.strip().lower()}: {reset_url}")
-
-        flash("If that email exists, a password reset link has been generated. Check the server console.")
-        return redirect(url_for("login"))
-
     return render_page("forgot_password.html")
 
 
-@app.route("/reset-password/<token>", methods=["GET", "POST"])
+@app.route("/reset-password/<token>", methods=["GET"])
 def reset_password(token):
-    if current_user.is_authenticated:
-        return redirect(url_for("index"))
-
-    token_row = get_valid_password_reset_token(token)
-    if not token_row:
-        flash("This password reset link is invalid or has expired.")
-        return redirect(url_for("forgot_password"))
-
-    if request.method == "POST":
-        password = request.form.get("password", "")
-        confirm_password = request.form.get("confirm_password", "")
-
-        if len(password) < 8:
-            flash("Password must be at least 8 characters long.")
-            return render_page("reset_password.html", token=token)
-
-        if password != confirm_password:
-            flash("Passwords do not match.")
-            return render_page("reset_password.html", token=token)
-
-        if not consume_password_reset_token(token, password):
-            flash("This password reset link is no longer valid.")
-            return redirect(url_for("forgot_password"))
-
-        flash("Password updated successfully. Please sign in.")
-        return redirect(url_for("login"))
-
-    return render_page("reset_password.html", token=token)
+    # Deprecated in favor of Firebase Native Reset
+    return redirect(url_for("login"))
 
 
 # ================= HEALTH =================
