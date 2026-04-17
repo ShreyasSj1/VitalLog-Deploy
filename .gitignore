@@ -1,0 +1,21 @@
+# Environments
+.env
+.flaskenv
+
+# Local Database
+fitness.db
+fitness.db-journal
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Mac OS folder attributes
+.DS_Store
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/

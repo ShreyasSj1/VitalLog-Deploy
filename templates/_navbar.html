@@ -115,3 +115,93 @@ if (!window.__sharedNavControls) {
     });
 }
 </script>
+
+{% if current_user.is_authenticated %}
+<div class="chatbot-container">
+    <div class="chat-popup" id="chatPopup">
+        <div class="chat-header">
+            <h3>AI Fitness Coach</h3>
+            <button class="chat-close" id="chatClose">×</button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message ai">
+                Hello {{ current_user.name }}! I'm your AI fitness coach. How can I help you today?
+            </div>
+        </div>
+        <div class="typing-indicator" id="typingIndicator">Coach is thinking...</div>
+        <div class="chat-input-area">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Ask about your diet, workout..." autocomplete="off">
+            <button class="chat-send" id="chatSend">🚀</button>
+        </div>
+    </div>
+    <button class="chatbot-toggle" id="chatToggle">💬</button>
+</div>
+
+<script>
+(function() {
+    const chatToggle = document.getElementById('chatToggle');
+    const chatClose = document.getElementById('chatClose');
+    const chatPopup = document.getElementById('chatPopup');
+    const chatInput = document.getElementById('chatInput');
+    const chatSend = document.getElementById('chatSend');
+    const chatMessages = document.getElementById('chatMessages');
+    const typingIndicator = document.getElementById('typingIndicator');
+
+    if (!chatToggle) return;
+
+    chatToggle.addEventListener('click', () => {
+        chatPopup.classList.toggle('active');
+        if (chatPopup.classList.contains('active')) {
+            chatInput.focus();
+        }
+    });
+
+    chatClose.addEventListener('click', () => {
+        chatPopup.classList.remove('active');
+    });
+
+    function addMessage(text, sender) {
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add('message', sender);
+        msgDiv.innerText = text;
+        chatMessages.appendChild(msgDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    async function sendMessage() {
+        const message = chatInput.value.trim();
+        if (!message) return;
+
+        addMessage(message, 'user');
+        chatInput.value = '';
+        typingIndicator.style.display = 'block';
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        try {
+            const response = await fetch('/chatbot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message })
+            });
+            
+            if (response.status === 401) {
+                window.location.reload();
+                return;
+            }
+
+            const data = await response.json();
+            typingIndicator.style.display = 'none';
+            addMessage(data.reply || 'Sorry, I encountered an error.', 'ai');
+        } catch (error) {
+            typingIndicator.style.display = 'none';
+            addMessage('Error connecting to the coach. Please check your connection.', 'ai');
+        }
+    }
+
+    chatSend.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+})();
+</script>
+{% endif %}

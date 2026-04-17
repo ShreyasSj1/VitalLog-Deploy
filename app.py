@@ -15,7 +15,9 @@ from flask import (
     request,
     session,
     url_for,
+    jsonify,
 )
+import groq
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -42,6 +44,12 @@ DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DEFAULT_SQLITE_PATH}"
 login_manager = LoginManager()
 login_manager.login_view = "login"
 login_manager.init_app(app)
+
+# ================= GROQ AI =================
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+groq_client = None
+if GROQ_API_KEY:
+    groq_client = groq.Groq(api_key=GROQ_API_KEY)
 
 
 # ================= DAILY GOALS =================
@@ -1376,6 +1384,92 @@ def report():
         weekly_gym=weekly_gym,
         max_date=date.today().isoformat(),
     )
+
+
+# ================= CHATBOT =================
+@app.route("/chatbot", methods=["POST"])
+@login_required
+def chatbot():
+    if not groq_client:
+        return jsonify({
+            "reply": "AI Chatbot is not configured. Please set the GROQ_API_KEY environment variable."
+        }), 503
+
+    data = request.json
+    user_message = data.get("message", "").strip()
+    if not user_message:
+        return jsonify({"reply": "Please enter a message."}), 400
+
+    db = get_db()
+    today = date.today().isoformat()
+
+    # 1. Fetch User Profile
+    user_row = db.execute(
+        "SELECT age, height, weight FROM users WHERE id = ?", (current_user.id,)
+    ).fetchone()
+
+    # 2. Fetch Today's Summaries
+    food_summary = db.execute(
+        """
+        SELECT COALESCE(SUM(calories), 0) as cal, COALESCE(SUM(protein), 0) as pro
+        FROM food_log WHERE user_id = ? AND date = ?
+        """,
+        (current_user.id, today),
+    ).fetchone()
+
+    gym_logs = db.execute(
+        "SELECT exercise, calories FROM gym_log WHERE user_id = ? AND date = ?",
+        (current_user.id, today),
+    ).fetchall()
+    gym_cal_total = sum(row["calories"] for row in gym_logs)
+    exercises = ", ".join(row["exercise"] for row in gym_logs)
+
+    sleep_row = db.execute(
+        "SELECT hours FROM sleep_log WHERE user_id = ? AND date = ?",
+        (current_user.id, today),
+    ).fetchone()
+
+    db.close()
+
+    # 3. Build Context
+    age = user_row["age"] or "Not set"
+    height = user_row["height"] or "Not set"
+    weight = user_row["weight"] or "Not set"
+    food_cal = food_summary["cal"]
+    food_pro = food_summary["pro"]
+    sleep_hrs = sleep_row["hours"] if sleep_row else "Not logged"
+
+    context = (
+        f"User Profile: Age: {age}, Height: {height}cm, Weight: {weight}kg.\n"
+        f"Today's stats ({today}):\n"
+        f"- Nutrition: consumed {food_cal} kcal and {food_pro}g protein.\n"
+        f"- Activity: burned {gym_cal_total} kcal via: {exercises if exercises else 'No workout yet'}.\n"
+        f"- Sleep: {sleep_hrs} hours logged."
+    )
+
+    # 4. Groq API Call
+    try:
+        chat_completion = groq_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a fitness coach AI integrated into a fitness tracking app called VitalLog. "
+                        "Give short, actionable, and encouraging advice. Avoid medical diagnosis. "
+                        "Use the user's real data when relevant. Keep responses concise (under 3 sentences)."
+                    ),
+                },
+                {"role": "user", "content": f"Context: {context}\n\nUser Question: {user_message}"},
+            ],
+            model="llama-3.3-70b-versatile",
+            temperature=0.7,
+            max_tokens=256,
+        )
+        reply = chat_completion.choices[0].message.content
+        return jsonify({"reply": reply})
+    except Exception as e:
+        print(f"Chatbot Error: {e}")
+        return jsonify({"reply": "I'm sorry, I'm having trouble connecting. Try again in a moment!"}), 500
 
 
 init_db()

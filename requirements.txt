@@ -2,3 +2,4 @@ Flask
 Flask-Login
 psycopg[binary]
 gunicorn
+groq
