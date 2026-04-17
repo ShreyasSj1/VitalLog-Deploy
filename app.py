@@ -195,13 +195,26 @@ def get_sqlite_path():
     return str(DEFAULT_SQLITE_PATH)
 
 
+def sqlite_compat_row(cursor):
+    dict_maker = dict_row(cursor)
+    def make_row(values):
+        d = dict_maker(values)
+        class Row(dict):
+            def __getitem__(self, key):
+                if isinstance(key, int):
+                    return values[key]
+                return super().__getitem__(key)
+        return Row(d)
+    return make_row
+
+
 def get_db():
     if DB_ENGINE == "postgres":
         if psycopg is None:
             raise RuntimeError(
                 "PostgreSQL support requires 'psycopg[binary]'. Install requirements before using DATABASE_URL."
             )
-        conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+        conn = psycopg.connect(DATABASE_URL, row_factory=sqlite_compat_row)
         return DBConnection(conn, "postgres")
 
     db = sqlite3.connect(get_sqlite_path())
