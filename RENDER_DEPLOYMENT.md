@@ -22,6 +22,7 @@ This Flask app is ready to deploy on Render with PostgreSQL.
 - `DATABASE_URL`
 - `SECRET_KEY`
 - `FLASK_DEBUG=false`
+- `GROQ_API_KEY` (Required for the AI chatbot)
 
 ## Notes
 
