@@ -239,7 +239,7 @@
                     <td>{{ log.calories | round }} kcal</td>
                     <td class="action-cell">
                         <form method="post"
-                              action="{{ url_for('delete_gym', item_id=log.id) }}"
+                              action="{{ url_for('dashboard.delete_gym', item_id=log.id) }}"
                               class="inline-form"
                               onsubmit="return confirm('Delete this workout?')">
                             <input type="hidden" name="date" value="{{ selected_date }}">

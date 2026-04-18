@@ -1,7 +1,7 @@
 <nav class="navbar">
     <div class="nav-left" id="navMenu">
         {% if current_user.is_authenticated %}
-        <a href="{{ url_for('profile') }}" class="nav-user nav-user-mobile nav-user-link">
+        <a href="{{ url_for('auth.profile') }}" class="nav-user nav-user-mobile nav-user-link">
             <div class="nav-avatar nav-avatar-fallback">{{ current_user.name[:1] | upper }}</div>
             <div class="nav-user-meta">
                 <strong>{{ current_user.name }}</strong>
@@ -10,24 +10,24 @@
         </a>
         {% else %}
         <div class="nav-auth-mobile">
-            <a href="{{ url_for('login') }}" class="secondary-btn nav-auth-link">Sign In</a>
-            <a href="{{ url_for('register') }}" class="primary-btn nav-auth-link">Create Account</a>
+            <a href="{{ url_for('auth.login') }}" class="secondary-btn nav-auth-link">Sign In</a>
+            <a href="{{ url_for('auth.register') }}" class="primary-btn nav-auth-link">Create Account</a>
         </div>
         {% endif %}
-        <a href="{{ url_for('index') }}" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
-        <a href="{{ url_for('food') }}" class="{{ 'active' if active_page == 'food' else '' }}">Food</a>
-        <a href="{{ url_for('gym') }}" class="{{ 'active' if active_page == 'gym' else '' }}">Workout</a>
-        <a href="{{ url_for('sleep') }}" class="{{ 'active' if active_page == 'sleep' else '' }}">Sleep</a>
-        <a href="{{ url_for('wellbeing') }}" class="{{ 'active' if active_page == 'wellbeing' else '' }}">Well-being</a>
-        <a href="{{ url_for('report') }}" class="{{ 'active' if active_page == 'report' else '' }}">Report</a>
+        <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
+        <a href="{{ url_for('dashboard.food') }}" class="{{ 'active' if active_page == 'food' else '' }}">Food</a>
+        <a href="{{ url_for('dashboard.gym') }}" class="{{ 'active' if active_page == 'gym' else '' }}">Workout</a>
+        <a href="{{ url_for('dashboard.sleep') }}" class="{{ 'active' if active_page == 'sleep' else '' }}">Sleep</a>
+        <a href="{{ url_for('dashboard.wellbeing') }}" class="{{ 'active' if active_page == 'wellbeing' else '' }}">Well-being</a>
+        <a href="{{ url_for('dashboard.report') }}" class="{{ 'active' if active_page == 'report' else '' }}">Report</a>
         {% if current_user.is_authenticated and current_user.role == 'admin' %}
-        <a href="/admin/users" class="{{ 'active' if active_page == 'admin_users' else '' }}">Users</a>
+        <a href="{{ url_for('dashboard.admin_users') }}" class="{{ 'active' if active_page == 'admin_users' else '' }}">Users</a>
         {% endif %}
     </div>
 
     <div class="nav-right">
         {% if current_user.is_authenticated %}
-        <a href="{{ url_for('profile') }}" class="nav-user nav-user-desktop nav-user-link">
+        <a href="{{ url_for('auth.profile') }}" class="nav-user nav-user-desktop nav-user-link">
             <div class="nav-avatar nav-avatar-fallback">{{ current_user.name[:1] | upper }}</div>
             <div class="nav-user-meta">
                 <strong>{{ current_user.name }}</strong>
@@ -36,8 +36,8 @@
         </a>
         {% else %}
         <div class="nav-auth-desktop">
-            <a href="{{ url_for('login') }}" class="secondary-btn nav-auth-link">Sign In</a>
-            <a href="{{ url_for('register') }}" class="primary-btn nav-auth-link">Create Account</a>
+            <a href="{{ url_for('auth.login') }}" class="secondary-btn nav-auth-link">Sign In</a>
+            <a href="{{ url_for('auth.register') }}" class="primary-btn nav-auth-link">Create Account</a>
         </div>
         {% endif %}
 

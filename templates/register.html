@@ -55,7 +55,7 @@
             </form>
 
             <p class="auth-switch">
-                Already have an account? <a href="{{ url_for('login') }}">Sign in</a>
+                Already have an account? <a href="{{ url_for('auth.login') }}">Sign in</a>
             </p>
         </div>
     </div>
@@ -132,7 +132,7 @@
                 });
                 
                 if (response.ok) {
-                    window.location.href = "{{ url_for('index') }}";
+                    window.location.href = "{{ url_for('dashboard.index') }}";
                 } else {
                     const data = await response.json();
                     showError("Server error: " + data.error);
@@ -168,7 +168,7 @@
                 });
                 
                 if (response.ok) {
-                    window.location.href = "{{ url_for('index') }}";
+                    window.location.href = "{{ url_for('dashboard.index') }}";
                 } else {
                     const data = await response.json();
                     showError("Server error: " + data.error);

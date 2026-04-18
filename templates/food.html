@@ -117,7 +117,7 @@
                        title="Edit">✏️</a>
 
                     <form method="post"
-                          action="{{ url_for('delete_food', item_id=f.id) }}"
+                          action="{{ url_for('dashboard.delete_food', item_id=f.id) }}"
                           class="inline-form"
                           onsubmit="return confirm('Delete this item?')">
                         <input type="hidden" name="date" value="{{ selected_date }}">
