@@ -20,6 +20,9 @@
         <a href="{{ url_for('sleep') }}" class="{{ 'active' if active_page == 'sleep' else '' }}">Sleep</a>
         <a href="{{ url_for('wellbeing') }}" class="{{ 'active' if active_page == 'wellbeing' else '' }}">Well-being</a>
         <a href="{{ url_for('report') }}" class="{{ 'active' if active_page == 'report' else '' }}">Report</a>
+        {% if current_user.is_authenticated and current_user.role == 'admin' %}
+        <a href="/admin/users" class="{{ 'active' if active_page == 'admin_users' else '' }}">Users</a>
+        {% endif %}
     </div>
 
     <div class="nav-right">
