@@ -9,6 +9,7 @@ from firebase_admin import credentials
 from config import Config
 from extensions import db
 from models import get_user_by_id, seed_lookup_tables
+from migrations import run_migrations
 from routes.auth import auth_bp
 from routes.dashboard import dashboard_bp
 
@@ -58,8 +59,9 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
 
 with app.app_context():
-    db.create_all()
-    seed_lookup_tables()
+    db.create_all()        # create any brand-new tables
+    run_migrations()       # ALTER existing tables (add new columns safely)
+    seed_lookup_tables()   # populate FoodItem / Exercise lookup tables
 
 # ================= RUN =================
 if __name__ == "__main__":
