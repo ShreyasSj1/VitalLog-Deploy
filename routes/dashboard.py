@@ -1,13 +1,13 @@
 import os
 from datetime import date, datetime, timedelta
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, abort
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, abort, flash
 from flask_login import login_required, current_user
 import groq
 from sqlalchemy import func
 
 from extensions import db
 from models import FoodLog, GymLog, SleepLog, WellbeingLog, User
-from utils import normalize_selected_date, get_week_dates
+from utils import normalize_selected_date, get_week_dates, parse_optional_float
 from constants import GOALS, FOOD_DATA, CARDIO_EXERCISES
 from config import Config
 
@@ -141,15 +141,25 @@ def food():
     if request.method == "POST":
         meal = request.form["meal"]
         food_item = request.form["food"]
-        qty = float(request.form.get("qty", 1))
+        try:
+            qty = float(request.form.get("qty", 1))
+            if qty <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            flash("Quantity must be a valid number greater than zero.")
+            return redirect(url_for("dashboard.food", date=selected_date))
 
         if food_item == "OTHERS":
-            name = request.form["other_name"]
-            calories = float(request.form["other_calories"]) * qty
-            protein = float(request.form["other_protein"]) * qty
-            fat = float(request.form["other_fat"]) * qty
-            sugar = float(request.form["other_sugar"]) * qty
+            name = (request.form.get("other_name") or "").strip() or "Other"
+            calories = (parse_optional_float(request.form.get("other_calories")) or 0.0) * qty
+            protein = (parse_optional_float(request.form.get("other_protein")) or 0.0) * qty
+            fat = (parse_optional_float(request.form.get("other_fat")) or 0.0) * qty
+            sugar = (parse_optional_float(request.form.get("other_sugar")) or 0.0) * qty
         else:
+            if meal not in FOOD_DATA or food_item not in FOOD_DATA[meal]:
+                flash("Invalid meal or food selection.")
+                return redirect(url_for("dashboard.food", date=selected_date))
+
             base = FOOD_DATA[meal][food_item]
             name = food_item
             calories, protein, fat, sugar = [value * qty for value in base]
