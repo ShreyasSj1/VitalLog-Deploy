@@ -81,20 +81,27 @@ def profile():
             age = parse_optional_int(request.form.get("age"))
             height = parse_optional_float(request.form.get("height"))
             weight = parse_optional_float(request.form.get("weight"))
+            goal_calories = parse_optional_float(request.form.get("goal_calories"))
+            goal_protein  = parse_optional_float(request.form.get("goal_protein"))
+            goal_fat      = parse_optional_float(request.form.get("goal_fat"))
+            goal_sugar    = parse_optional_float(request.form.get("goal_sugar"))
         except ValueError:
-            flash("Age, height, and weight must be valid numbers.")
+            flash("Please enter valid numbers for all fields.")
             return redirect(url_for("auth.profile"))
 
-        current_user.name = name
-        current_user.age = age
-        current_user.height = height
-        current_user.weight = weight
+        current_user.name          = name
+        current_user.age           = age
+        current_user.height        = height
+        current_user.weight        = weight
+        current_user.goal_calories = goal_calories
+        current_user.goal_protein  = goal_protein
+        current_user.goal_fat      = goal_fat
+        current_user.goal_sugar    = goal_sugar
         db.session.commit()
-        
-        flash("Personal information updated.")
+
+        flash("Profile updated.")
         return redirect(url_for("auth.profile"))
 
-    # SQLAlchemy allows us to just pass `current_user` to the template
     return render_template("profile.html", active_page="profile", profile=current_user)
 
 

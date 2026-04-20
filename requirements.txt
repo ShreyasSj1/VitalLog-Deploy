@@ -5,3 +5,6 @@ psycopg[binary]
 gunicorn
 groq
 firebase-admin
+pytest
+pytest-flask
+

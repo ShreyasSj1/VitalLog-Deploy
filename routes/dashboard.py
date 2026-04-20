@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import date, datetime, timedelta
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, abort, flash
 from flask_login import login_required, current_user
@@ -6,9 +7,9 @@ import groq
 from sqlalchemy import func
 
 from extensions import db
-from models import FoodLog, GymLog, SleepLog, WellbeingLog, User
+from models import FoodLog, GymLog, SleepLog, WellbeingLog, User, FoodItem, Exercise
 from utils import normalize_selected_date, get_week_dates, parse_optional_float
-from constants import GOALS, FOOD_DATA, CARDIO_EXERCISES
+from constants import FOOD_DATA, CARDIO_EXERCISES, EXERCISE_CATALOG, MUSCLE_FACTORS, INTENSITY_MAP
 from config import Config
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -67,9 +68,10 @@ def index():
 
     score = 100
     reasons = []
+    goals = current_user.goals   # per-user goals (falls back to app defaults)
 
     cal_intake = totals.cal
-    cal_goal = GOALS["calories"]
+    cal_goal = goals["calories"]
     if cal_intake > cal_goal:
         penalty = min(20, int((cal_intake - cal_goal) / 20))
         score -= penalty
@@ -78,13 +80,13 @@ def index():
     elif cal_intake > 0:
         reasons.append(("Calorie target healthy", "good"))
 
-    if totals.protein >= GOALS["protein"]:
+    if totals.protein >= goals["protein"]:
         reasons.append(("Protein goal met", "good"))
     else:
         score -= 10
         reasons.append(("Protein intake low", "bad"))
 
-    if totals.sugar > GOALS["sugar"]:
+    if totals.sugar > goals["sugar"]:
         score -= 15
         reasons.append(("Sugar limit exceeded", "bad"))
     else:
@@ -114,7 +116,7 @@ def index():
         "index.html",
         active_page="dashboard",
         selected_date=selected_date,
-        goals=GOALS,
+        goals=goals,
         total_calories=totals.cal,
         total_protein=totals.protein,
         total_fat=totals.fat,
@@ -140,7 +142,7 @@ def food():
 
     if request.method == "POST":
         meal = request.form["meal"]
-        food_item = request.form["food"]
+        food_item_name = request.form["food"]
         try:
             qty = float(request.form.get("qty", 1))
             if qty <= 0:
@@ -149,20 +151,32 @@ def food():
             flash("Quantity must be a valid number greater than zero.")
             return redirect(url_for("dashboard.food", date=selected_date))
 
-        if food_item == "OTHERS":
+        if food_item_name == "OTHERS":
             name = (request.form.get("other_name") or "").strip() or "Other"
             calories = (parse_optional_float(request.form.get("other_calories")) or 0.0) * qty
             protein = (parse_optional_float(request.form.get("other_protein")) or 0.0) * qty
             fat = (parse_optional_float(request.form.get("other_fat")) or 0.0) * qty
             sugar = (parse_optional_float(request.form.get("other_sugar")) or 0.0) * qty
         else:
-            if meal not in FOOD_DATA or food_item not in FOOD_DATA[meal]:
+            # Look up nutritional data from the DB lookup table first,
+            # fall back to the in-memory FOOD_DATA dict for safety.
+            food_ref = FoodItem.query.filter_by(
+                meal_category=meal, name=food_item_name
+            ).first()
+
+            if food_ref:
+                name = food_ref.name
+                calories = food_ref.calories * qty
+                protein = food_ref.protein * qty
+                fat = food_ref.fat * qty
+                sugar = food_ref.sugar * qty
+            elif meal in FOOD_DATA and food_item_name in FOOD_DATA[meal]:
+                base = FOOD_DATA[meal][food_item_name]
+                name = food_item_name
+                calories, protein, fat, sugar = [v * qty for v in base]
+            else:
                 flash("Invalid meal or food selection.")
                 return redirect(url_for("dashboard.food", date=selected_date))
-
-            base = FOOD_DATA[meal][food_item]
-            name = food_item
-            calories, protein, fat, sugar = [value * qty for value in base]
 
         log_entry = FoodLog(
             user_id=current_user.id,
@@ -340,46 +354,27 @@ def gym():
         except ValueError:
             incline = 0
 
-        muscle_factors = {
-            "Legs": 1.25,
-            "Back": 1.2,
-            "Chest": 1.1,
-            "Shoulders": 1.0,
-            "Arms": 0.8,
-            "Core": 0.9,
-        }
         muscle = request.form["muscle"]
-        muscle_factor = muscle_factors.get(muscle, 1.0)
+        muscle_factor = MUSCLE_FACTORS.get(muscle, 1.0)
 
-        intensity_map = {"Easy": 0.8, "Medium": 1.0, "Hard": 1.3, "Extreme": 1.6}
-        intensity_val = intensity_map.get(intensity, 1.0)
+        intensity_val = INTENSITY_MAP.get(intensity, 1.0)
 
         if is_cardio:
             body_weight = current_user.weight if current_user.weight else 70
 
-            cardio_met = {
-                "Treadmill (Running)": 8.3,
-                "Cycling": 6.8,
-                "Elliptical": 5.0,
-                "Inclined Walking": 4.3,
-            }
-            cardio_baseline_speed = {
-                "Treadmill (Running)": 8.0,
-                "Cycling": 16.0,
-                "Elliptical": 6.0,
-                "Inclined Walking": 5.0,
-            }
-            cardio_speed_factor = {
-                "Treadmill (Running)": 0.45,
-                "Cycling": 0.2,
-                "Elliptical": 0.3,
-                "Inclined Walking": 0.25,
-            }
+            # Look up cardio metadata from the Exercise DB table first
+            ex_ref = Exercise.query.filter_by(name=exercise, is_cardio=True).first()
+            if ex_ref and ex_ref.cardio_meta:
+                meta = json.loads(ex_ref.cardio_meta)
+            else:
+                # Fallback to CARDIO_META constant
+                from constants import CARDIO_META
+                meta = CARDIO_META.get(exercise, {"met": 5.0, "baseline_speed": 6.0, "speed_factor": 0.25})
 
-            base_met = cardio_met.get(exercise, 5.0)
-            baseline_speed = cardio_baseline_speed.get(exercise, 6.0)
-            speed_factor = cardio_speed_factor.get(exercise, 0.25)
-            speed_boost = max(0, speed - baseline_speed) * speed_factor
+            base_met = meta["met"]
+            baseline_speed = meta["baseline_speed"]
+            speed_factor_val = meta["speed_factor"]
+            speed_boost = max(0, speed - baseline_speed) * speed_factor_val
             incline_boost = max(0, incline) * 0.35 if exercise == "Inclined Walking" else 0
             calories = ((base_met + speed_boost + incline_boost) * 3.5 * body_weight / 200) * duration
             sets = 0
@@ -451,6 +446,162 @@ def delete_gym(item_id):
     GymLog.query.filter_by(id=item_id, user_id=current_user.id).delete()
     db.session.commit()
     return redirect(url_for("dashboard.gym", date=selected_date))
+
+
+# ───────────────────────── Lookup API ──────────────────────────
+
+@dashboard_bp.route("/api/food-items")
+@login_required
+def api_food_items():
+    """Return food items for a given meal category.
+    Query param: ?category=Breakfast
+    """
+    category = request.args.get("category", "").strip()
+    if not category:
+        # Return all categories grouped
+        result = {}
+        for item in FoodItem.query.order_by(FoodItem.meal_category, FoodItem.name).all():
+            result.setdefault(item.meal_category, []).append(item.to_dict())
+        return jsonify(result)
+
+    items = FoodItem.query.filter_by(meal_category=category).order_by(FoodItem.name).all()
+    return jsonify([i.to_dict() for i in items])
+
+
+@dashboard_bp.route("/api/exercises")
+@login_required
+def api_exercises():
+    """Return exercises for a given muscle group.
+    Query param: ?muscle=Chest
+    Returns all exercises grouped by muscle_group if no param supplied.
+    """
+    muscle = request.args.get("muscle", "").strip()
+    if not muscle:
+        result = {}
+        for ex in Exercise.query.order_by(Exercise.muscle_group, Exercise.name).all():
+            result.setdefault(ex.muscle_group, []).append(ex.to_dict())
+        return jsonify(result)
+
+    exercises = Exercise.query.filter_by(muscle_group=muscle).order_by(Exercise.name).all()
+    return jsonify([e.to_dict() for e in exercises])
+
+
+# ───────────────────────── CSV Export ──────────────────────────
+
+@dashboard_bp.route("/export/csv")
+@login_required
+def export_csv():
+    """Download all logs for the current user as a CSV file.
+
+    Optional query params:
+        ?from=YYYY-MM-DD  (default: 30 days ago)
+        ?to=YYYY-MM-DD    (default: today)
+    """
+    import csv
+    import io
+    from datetime import timedelta
+    from flask import Response
+
+    today = date.today()
+    try:
+        date_from = date.fromisoformat(request.args.get("from", (today - timedelta(days=30)).isoformat()))
+        date_to   = date.fromisoformat(request.args.get("to",   today.isoformat()))
+    except ValueError:
+        date_from = today - timedelta(days=30)
+        date_to   = today
+
+    # Clamp so from <= to
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    date_from_s = date_from.isoformat()
+    date_to_s   = date_to.isoformat()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # ── Food log ──────────────────────────────────────────────
+    writer.writerow(["=== Food Log ==="])
+    writer.writerow(["Date", "Meal", "Food", "Qty", "Calories", "Protein (g)", "Fat (g)", "Sugar (g)"])
+    food_rows = (
+        FoodLog.query
+        .filter(FoodLog.user_id == current_user.id,
+                FoodLog.date >= date_from_s,
+                FoodLog.date <= date_to_s)
+        .order_by(FoodLog.date, FoodLog.id)
+        .all()
+    )
+    for r in food_rows:
+        writer.writerow([r.date, r.meal, r.food, r.qty,
+                         round(r.calories or 0, 2),
+                         round(r.protein  or 0, 2),
+                         round(r.fat      or 0, 2),
+                         round(r.sugar    or 0, 2)])
+
+    writer.writerow([])
+
+    # ── Sleep log ─────────────────────────────────────────────
+    writer.writerow(["=== Sleep Log ==="])
+    writer.writerow(["Date", "Hours", "Quality (1-5)", "Notes"])
+    sleep_rows = (
+        SleepLog.query
+        .filter(SleepLog.user_id == current_user.id,
+                SleepLog.date >= date_from_s,
+                SleepLog.date <= date_to_s)
+        .order_by(SleepLog.date)
+        .all()
+    )
+    for r in sleep_rows:
+        writer.writerow([r.date, r.hours, r.quality, r.notes or ""])
+
+    writer.writerow([])
+
+    # ── Gym log ───────────────────────────────────────────────
+    writer.writerow(["=== Gym Log ==="])
+    writer.writerow(["Date", "Muscle", "Exercise", "Sets", "Reps", "Weight (kg)",
+                     "Speed (km/h)", "Incline (%)", "Intensity", "Duration (min)", "Calories Burned"])
+    gym_rows = (
+        GymLog.query
+        .filter(GymLog.user_id == current_user.id,
+                GymLog.date >= date_from_s,
+                GymLog.date <= date_to_s)
+        .order_by(GymLog.date, GymLog.id)
+        .all()
+    )
+    for r in gym_rows:
+        writer.writerow([r.date, r.muscle, r.exercise,
+                         r.sets or 0, r.reps or 0,
+                         round(r.weight   or 0, 2),
+                         round(r.speed    or 0, 2),
+                         round(r.incline  or 0, 2),
+                         r.intensity or "",
+                         round(r.duration or 0, 2),
+                         round(r.calories or 0, 2)])
+
+    writer.writerow([])
+
+    # ── Wellbeing log ─────────────────────────────────────────
+    writer.writerow(["=== Wellbeing Log ==="])
+    writer.writerow(["Date", "Activity", "Duration (min)"])
+    wb_rows = (
+        WellbeingLog.query
+        .filter(WellbeingLog.user_id == current_user.id,
+                WellbeingLog.date >= date_from_s,
+                WellbeingLog.date <= date_to_s)
+        .order_by(WellbeingLog.date, WellbeingLog.id)
+        .all()
+    )
+    for r in wb_rows:
+        writer.writerow([r.date, r.activity, r.minutes])
+
+    output.seek(0)
+    filename = f"vitallog_{current_user.email}_{date_from_s}_to_{date_to_s}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
 
 
 @dashboard_bp.route("/report")

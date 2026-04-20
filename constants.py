@@ -74,3 +74,60 @@ FOOD_DATA = {
 }
 
 CARDIO_EXERCISES = {"Treadmill (Running)", "Cycling", "Elliptical", "Inclined Walking"}
+
+# ============================================================
+# Full exercise catalog: muscle_group → list of exercise names
+# ============================================================
+EXERCISE_CATALOG = {
+    "Chest": [
+        "Bench Press", "Incline Bench Press", "Decline Bench Press",
+        "Dumbbell Fly", "Push-Ups", "Cable Crossover", "Chest Dip",
+    ],
+    "Back": [
+        "Pull-Ups", "Lat Pulldown", "Seated Cable Row", "Barbell Row",
+        "Dumbbell Row", "Deadlift", "T-Bar Row", "Face Pulls",
+    ],
+    "Shoulders": [
+        "Overhead Press", "Arnold Press", "Lateral Raises",
+        "Front Raises", "Rear Delt Fly", "Shrugs",
+    ],
+    "Arms": [
+        "Bicep Curl", "Hammer Curl", "Preacher Curl",
+        "Tricep Pushdown", "Skull Crushers", "Close-Grip Bench Press",
+        "Tricep Dip", "Concentration Curl",
+    ],
+    "Legs": [
+        "Squat", "Leg Press", "Leg Extension", "Leg Curl",
+        "Romanian Deadlift", "Lunges", "Calf Raises", "Hack Squat",
+        "Goblet Squat", "Bulgarian Split Squat",
+    ],
+    "Core": [
+        "Plank", "Crunches", "Leg Raises", "Russian Twists",
+        "Ab Rollout", "Cable Crunch", "Hanging Knee Raise",
+        "Bicycle Crunches", "Side Plank",
+    ],
+    "Cardio": [
+        "Treadmill (Running)", "Cycling", "Elliptical", "Inclined Walking",
+    ],
+}
+
+# Muscle calorie multipliers (used in calorie estimation for weight training)
+MUSCLE_FACTORS = {
+    "Legs": 1.25,
+    "Back": 1.2,
+    "Chest": 1.1,
+    "Shoulders": 1.0,
+    "Arms": 0.8,
+    "Core": 0.9,
+    "Cardio": 1.0,
+}
+
+# Cardio MET values and speed parameters
+CARDIO_META = {
+    "Treadmill (Running)": {"met": 8.3, "baseline_speed": 8.0, "speed_factor": 0.45},
+    "Cycling":             {"met": 6.8, "baseline_speed": 16.0, "speed_factor": 0.2},
+    "Elliptical":          {"met": 5.0, "baseline_speed": 6.0,  "speed_factor": 0.3},
+    "Inclined Walking":    {"met": 4.3, "baseline_speed": 5.0,  "speed_factor": 0.25},
+}
+
+INTENSITY_MAP = {"Easy": 0.8, "Medium": 1.0, "Hard": 1.3, "Extreme": 1.6}

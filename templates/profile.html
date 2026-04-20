@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal Information</title>
+    <title>Profile & Goals — VitalLog</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -16,10 +16,12 @@
     {% include "_flash_messages.html" %}
 
     <div class="card profile-card">
-        <h2>Personal Information</h2>
-        <p class="profile-copy">Keep your basics up to date so your fitness journey stays personal and easy to track.</p>
+        <form method="post" class="profile-form" id="profile-form">
 
-        <form method="post" class="profile-form">
+            <!-- ── Personal Information ─────────────────────────── -->
+            <h2>Personal Information</h2>
+            <p class="profile-copy">Keep your basics up to date so your fitness journey stays personal and easy to track.</p>
+
             <div class="form-row">
                 <label>Name</label>
                 <input type="text" name="name" value="{{ profile.name or '' }}" autocomplete="name" required>
@@ -34,23 +36,74 @@
             <div class="profile-grid">
                 <div class="form-row">
                     <label>Age</label>
-                    <input type="number" name="age" min="0" step="1" value="{{ profile.age if profile.age is not none else '' }}" placeholder="Optional">
+                    <input type="number" name="age" min="0" step="1"
+                           value="{{ profile.age if profile.age is not none else '' }}"
+                           placeholder="Optional">
                 </div>
 
                 <div class="form-row">
                     <label>Height (cm)</label>
-                    <input type="number" name="height" min="0" step="0.1" value="{{ profile.height if profile.height is not none else '' }}" placeholder="Optional">
+                    <input type="number" name="height" min="0" step="0.1"
+                           value="{{ profile.height if profile.height is not none else '' }}"
+                           placeholder="Optional">
                 </div>
 
                 <div class="form-row">
                     <label>Weight (kg)</label>
-                    <input type="number" name="weight" min="0" step="0.1" value="{{ profile.weight if profile.weight is not none else '' }}" placeholder="Optional">
+                    <input type="number" name="weight" min="0" step="0.1"
+                           value="{{ profile.weight if profile.weight is not none else '' }}"
+                           placeholder="Optional">
                 </div>
             </div>
 
-            <button type="submit" class="primary-btn">Save Details</button>
+            <!-- ── Daily Goals ─────────────────────────────────── -->
+            <h2 style="margin-top: 2rem;">Daily Nutrition Goals</h2>
+            <p class="profile-copy">Customise your targets. Leave a field empty to use the app defaults.</p>
+
+            <div class="profile-grid">
+                <div class="form-row">
+                    <label>Calorie Goal (kcal)</label>
+                    <input type="number" name="goal_calories" id="goal_calories" min="0" step="1"
+                           value="{{ profile.goal_calories | int if profile.goal_calories is not none else '' }}"
+                           placeholder="Default: 1500">
+                </div>
+
+                <div class="form-row">
+                    <label>Protein Goal (g)</label>
+                    <input type="number" name="goal_protein" id="goal_protein" min="0" step="0.1"
+                           value="{{ profile.goal_protein if profile.goal_protein is not none else '' }}"
+                           placeholder="Default: 100">
+                </div>
+
+                <div class="form-row">
+                    <label>Fat Limit (g)</label>
+                    <input type="number" name="goal_fat" id="goal_fat" min="0" step="0.1"
+                           value="{{ profile.goal_fat if profile.goal_fat is not none else '' }}"
+                           placeholder="Default: 40">
+                </div>
+
+                <div class="form-row">
+                    <label>Sugar Limit (g)</label>
+                    <input type="number" name="goal_sugar" id="goal_sugar" min="0" step="0.1"
+                           value="{{ profile.goal_sugar if profile.goal_sugar is not none else '' }}"
+                           placeholder="Default: 25">
+                </div>
+            </div>
+
+            <button type="submit" class="primary-btn">Save Profile &amp; Goals</button>
         </form>
 
+        <!-- ── Data Export ─────────────────────────────────── -->
+        <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border, #2a2a2a);">
+            <h2>Export Your Data</h2>
+            <p class="profile-copy">Download all your food, sleep, gym, and wellbeing logs as a CSV file.</p>
+            <a href="{{ url_for('dashboard.export_csv') }}" class="secondary-btn"
+               id="export-csv-btn" style="display: inline-block; margin-top: 0.5rem;">
+                ⬇ Download CSV (last 30 days)
+            </a>
+        </div>
+
+        <!-- ── Log Out ─────────────────────────────────────── -->
         <form method="post" action="{{ url_for('auth.logout') }}" class="profile-logout-form">
             <button type="submit" class="secondary-btn profile-logout-btn">Log out</button>
         </form>

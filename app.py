@@ -8,7 +8,7 @@ from firebase_admin import credentials
 
 from config import Config
 from extensions import db
-from models import get_user_by_id
+from models import get_user_by_id, seed_lookup_tables
 from routes.auth import auth_bp
 from routes.dashboard import dashboard_bp
 
@@ -59,6 +59,7 @@ app.register_blueprint(dashboard_bp)
 
 with app.app_context():
     db.create_all()
+    seed_lookup_tables()
 
 # ================= RUN =================
 if __name__ == "__main__":

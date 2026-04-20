@@ -28,11 +28,29 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Integer, nullable=False, default=1)
     created_at = db.Column(db.String(50), nullable=False, default=lambda: utc_iso(now_utc()))
 
+    # ── Per-user daily goals (fall back to app defaults when NULL) ─────────
+    goal_calories = db.Column(db.Float)
+    goal_protein  = db.Column(db.Float)
+    goal_fat      = db.Column(db.Float)
+    goal_sugar    = db.Column(db.Float)
+
     food_logs = db.relationship('FoodLog', backref='user', lazy=True, cascade="all, delete-orphan")
     sleep_logs = db.relationship('SleepLog', backref='user', lazy=True, cascade="all, delete-orphan")
     wellbeing_logs = db.relationship('WellbeingLog', backref='user', lazy=True, cascade="all, delete-orphan")
     gym_logs = db.relationship('GymLog', backref='user', lazy=True, cascade="all, delete-orphan")
     reset_tokens = db.relationship('PasswordResetToken', backref='user', lazy=True, cascade="all, delete-orphan")
+
+    @property
+    def goals(self):
+        """Return this user's daily goals, falling back to app-wide defaults."""
+        from constants import GOALS as _DEFAULTS
+        return {
+            "calories": self.goal_calories if self.goal_calories is not None else _DEFAULTS["calories"],
+            "protein":  self.goal_protein  if self.goal_protein  is not None else _DEFAULTS["protein"],
+            "fat":      self.goal_fat      if self.goal_fat      is not None else _DEFAULTS["fat"],
+            "sugar":    self.goal_sugar    if self.goal_sugar    is not None else _DEFAULTS["sugar"],
+        }
+
 
 
 class PasswordResetToken(db.Model):
@@ -110,6 +128,113 @@ class GymLog(db.Model):
     __table_args__ = (
         db.Index('idx_gym_log_user_date', 'user_id', 'date'),
     )
+
+
+# ──────────────────────────────────────────────
+# LOOKUP TABLES  (populated by seed on startup)
+# ──────────────────────────────────────────────
+
+class FoodItem(db.Model):
+    """Reference table for known foods with their nutritional data per serving."""
+    __tablename__ = "food_items"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    meal_category = db.Column(db.String(50), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    calories = db.Column(db.Float, nullable=False)
+    protein = db.Column(db.Float, nullable=False)
+    fat = db.Column(db.Float, nullable=False)
+    sugar = db.Column(db.Float, nullable=False)
+    is_custom = db.Column(db.Boolean, nullable=False, default=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('meal_category', 'name', name='uq_food_item_category_name'),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "meal_category": self.meal_category,
+            "name": self.name,
+            "calories": self.calories,
+            "protein": self.protein,
+            "fat": self.fat,
+            "sugar": self.sugar,
+            "is_custom": self.is_custom,
+        }
+
+
+class Exercise(db.Model):
+    """Reference table for known exercises with their muscle group and cardio flag."""
+    __tablename__ = "exercises"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    muscle_group = db.Column(db.String(50), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    is_cardio = db.Column(db.Boolean, nullable=False, default=False)
+    # Cardio-specific metadata (stored as JSON string for portability)
+    cardio_meta = db.Column(db.Text)
+    is_custom = db.Column(db.Boolean, nullable=False, default=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "muscle_group": self.muscle_group,
+            "name": self.name,
+            "is_cardio": self.is_cardio,
+            "is_custom": self.is_custom,
+        }
+
+
+def seed_lookup_tables():
+    """Populate FoodItem and Exercise tables from constants.py.
+
+    Idempotent — uses INSERT OR IGNORE semantics so it's safe to run on every
+    startup without creating duplicates.
+    """
+    import json as _json
+    from constants import FOOD_DATA, EXERCISE_CATALOG, CARDIO_EXERCISES, CARDIO_META
+
+    # ── Food items ────────────────────────────────────────────────────────
+    existing_food_keys = {
+        (fi.meal_category, fi.name)
+        for fi in FoodItem.query.with_entities(FoodItem.meal_category, FoodItem.name).all()
+    }
+    new_foods = []
+    for category, items in FOOD_DATA.items():
+        for name, (cal, pro, fat, sug) in items.items():
+            if (category, name) not in existing_food_keys:
+                new_foods.append(FoodItem(
+                    meal_category=category,
+                    name=name,
+                    calories=cal,
+                    protein=pro,
+                    fat=fat,
+                    sugar=sug,
+                    is_custom=False,
+                ))
+    if new_foods:
+        db.session.bulk_save_objects(new_foods)
+
+    # ── Exercises ─────────────────────────────────────────────────────────
+    existing_exercise_names = {
+        e.name for e in Exercise.query.with_entities(Exercise.name).all()
+    }
+    new_exercises = []
+    for muscle_group, exercise_names in EXERCISE_CATALOG.items():
+        for ex_name in exercise_names:
+            if ex_name not in existing_exercise_names:
+                is_cardio = ex_name in CARDIO_EXERCISES
+                meta_json = _json.dumps(CARDIO_META[ex_name]) if is_cardio and ex_name in CARDIO_META else None
+                new_exercises.append(Exercise(
+                    muscle_group=muscle_group,
+                    name=ex_name,
+                    is_cardio=is_cardio,
+                    cardio_meta=meta_json,
+                    is_custom=False,
+                ))
+    if new_exercises:
+        db.session.bulk_save_objects(new_exercises)
+
+    db.session.commit()
 
 
 def get_user_by_id(user_id):
